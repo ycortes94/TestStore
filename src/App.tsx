@@ -23,8 +23,14 @@ function App() {
   const [sortOption, setSortOption] = useState<SortOption>('featured')
   const [cart, setCart] = useState<Record<string, CartItem>>({})
   const catalogRef = useRef<HTMLElement | null>(null)
+  const hasLoggedHomeView = useRef(false)
 
   useEffect(() => {
+    if (hasLoggedHomeView.current) {
+      return
+    }
+
+    hasLoggedHomeView.current = true
     trackEvent('home_viewed', { totalProducts: catalogProducts.length })
   }, [])
 
