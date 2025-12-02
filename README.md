@@ -23,7 +23,7 @@ npm run build # type-check and create a production build in dist/
 The storefront ships with the Amplitude Browser SDK 2.x for lightweight instrumentation. Provide an API key through Vite to enable it:
 
 ```
-VITE_AMPLITUDE_API_KEY=5df5f04114dd4043d7fa68c45d08fa6a
+VITE_AMPLITUDE_API_KEY=YOUR_API_KEY
 ```
 
 This project key is preconfigured in code for convenience, but you can override it with your own environment variable for isolated testing. With the key in place, the app tracks basic funnel events such as hero interactions, filter usage, and cart changes so you can evaluate flows in Amplitude.
