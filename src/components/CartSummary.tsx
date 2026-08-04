@@ -1,3 +1,6 @@
+import { useGateValue } from '@statsig/react-bindings'
+import CouponPanel from './CouponPanel'
+import { COUPON_GATE, COUPON_PERCENT, getCouponBreakdown } from '../lib/coupon'
 import type { CartItem } from '../types'
 
 type CartSummaryProps = {
@@ -6,9 +9,13 @@ type CartSummaryProps = {
   onIncrement: (productId: string) => void
   onDecrement: (productId: string) => void
   onClear: () => void
+  onBeginCheckout: () => void
 }
 
-const CartSummary = ({ items, total, onIncrement, onDecrement, onClear }: CartSummaryProps) => {
+const CartSummary = ({ items, total, onIncrement, onDecrement, onClear, onBeginCheckout }: CartSummaryProps) => {
+  const couponFeatureEnabled = useGateValue(COUPON_GATE)
+  const coupon = getCouponBreakdown(total, couponFeatureEnabled)
+
   return (
     <aside className="cart-summary">
       <header>
@@ -45,12 +52,28 @@ const CartSummary = ({ items, total, onIncrement, onDecrement, onClear }: CartSu
         </ul>
       )}
 
-      <div className="cart-summary__total">
-        <span>Subtotal</span>
-        <strong>${total.toFixed(2)}</strong>
+      <CouponPanel featureEnabled={couponFeatureEnabled} hasItems={items.length > 0} breakdown={coupon} />
+
+      <div className="cart-summary__totals">
+        <div className="cart-summary__total">
+          <span>Subtotal</span>
+          <strong>${total.toFixed(2)}</strong>
+        </div>
+        {coupon.eligible && (
+          <>
+            <div className="cart-summary__total cart-summary__total--discount">
+              <span>Coupon ({COUPON_PERCENT}% off)</span>
+              <strong>−${coupon.discountAmount.toFixed(2)}</strong>
+            </div>
+            <div className="cart-summary__total">
+              <span>Total</span>
+              <strong>${coupon.totalAfterDiscount.toFixed(2)}</strong>
+            </div>
+          </>
+        )}
       </div>
 
-      <button className="secondary full-width" type="button" disabled={!items.length}>
+      <button className="secondary full-width" type="button" disabled={!items.length} onClick={onBeginCheckout}>
         Continue to checkout
       </button>
       <p className="microcopy">Free returns within 60 days. Taxes calculated at checkout.</p>

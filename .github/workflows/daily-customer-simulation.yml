@@ -1,0 +1,53 @@
+# Runs the Playwright “customer simulation” every morning in Pacific time
+# (America/Los_Angeles — handles PST/PDT). See:
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onschedule
+#
+# Scheduling notes:
+# - Runs only from the repository DEFAULT branch (merge this file to main/master).
+# - GitHub may delay scheduled runs during high load (not wall-clock exact).
+# - Forks: scheduled workflows are disabled unless you enable Actions.
+# - Manual test: Actions → this workflow → “Run workflow”.
+name: Daily customer simulation
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+      timezone: America/Los_Angeles
+    - cron: '30 9 * * *'
+      timezone: America/Los_Angeles
+    - cron: '0 14 * * *'
+      timezone: America/Los_Angeles
+  workflow_dispatch:
+
+# Do not cancel an in-progress run when the next schedule fires.
+concurrency:
+  group: daily-customer-simulation
+  cancel-in-progress: false
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run customer simulation
+        run: npm run simulate-customers
+        env:
+          CI: true
+          SIM_EXPERIMENT_USERS: '8'
+          VITE_STATSIG_TIER: production
+          # Create under Repo → Settings → Secrets and variables → Actions
+          VITE_STATSIG_CLIENT_KEY: ${{ secrets.VITE_STATSIG_CLIENT_KEY }}
+          VITE_AMPLITUDE_API_KEY: ${{ secrets.VITE_AMPLITUDE_API_KEY }}

@@ -1,10 +1,14 @@
+import type { NavTabId } from '../nav'
+import { NAV_TABS } from '../nav'
+
 type HeaderProps = {
   cartCount: number
+  activeTab: NavTabId
+  onTabChange: (tab: NavTabId) => void
+  onOpenCart: () => void
 }
 
-const navLinks = ['New arrivals', 'Best sellers', 'Studio kits', 'Journal']
-
-const Header = ({ cartCount }: HeaderProps) => {
+const Header = ({ cartCount, activeTab, onTabChange, onOpenCart }: HeaderProps) => {
   return (
     <header className="app-header">
       <div className="app-header__brand">
@@ -15,24 +19,37 @@ const Header = ({ cartCount }: HeaderProps) => {
         </div>
       </div>
 
-      <nav className="app-header__nav">
-        {navLinks.map((link) => (
-          <button key={link} className="text-button" type="button">
-            {link}
-          </button>
-        ))}
+      <nav className="app-header__nav" aria-label="Main">
+        <div role="tablist" className="app-header__tabs" aria-orientation="horizontal">
+          {NAV_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`tab-trigger-${tab.id}`}
+              aria-selected={activeTab === tab.id}
+              aria-controls="main-tab-panel"
+              className={activeTab === tab.id ? 'app-header__tab is-active' : 'app-header__tab'}
+              onClick={() => onTabChange(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </nav>
 
       <div className="app-header__actions">
-        <button className="text-button" type="button">
-          Support
-        </button>
         <button className="pill-button" type="button">
           <span role="img" aria-label="account">
             🙂
           </span>
         </button>
-        <button className="cart-chip" type="button">
+        <button
+          className="cart-chip"
+          type="button"
+          onClick={onOpenCart}
+          aria-label={`Open bag, ${cartCount} items`}
+        >
           <span>Bag</span>
           <span className="cart-chip__count">{cartCount}</span>
         </button>

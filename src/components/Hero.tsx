@@ -1,24 +1,34 @@
+import { useExperiment } from '@statsig/react-bindings'
+
 type HeroProps = {
   totalProducts: number
   onPrimaryAction?: () => void
+  onSecondaryAction?: () => void
 }
 
-const Hero = ({ totalProducts, onPrimaryAction }: HeroProps) => {
+const DEFAULT_HEADLINE = 'Outfit the next training cycle.'
+const DEFAULT_SUBCOPY =
+  'Curated apparel, footwear, and accessories dialed in by our in-house styling team. Every piece is fit-tested and ready to ship.'
+const DEFAULT_PRIMARY_CTA = 'Explore the edit'
+
+const Hero = ({ totalProducts, onPrimaryAction, onSecondaryAction }: HeroProps) => {
+  const experiment = useExperiment('hero_copy_test')
+  const headline = experiment.get('hero_headline', DEFAULT_HEADLINE)
+  const subcopy = experiment.get('hero_subcopy', DEFAULT_SUBCOPY)
+  const primaryCta = experiment.get('hero_primary_cta', DEFAULT_PRIMARY_CTA)
+
   return (
     <section className="hero">
       <p className="eyebrow">Test Store — Shipping carbon neutral since 2020</p>
       <div className="hero__content">
         <div>
-          <h1>Outfit the next training cycle.</h1>
-          <p>
-            Curated apparel, footwear, and accessories dialed in by our in-house styling team.
-            Every piece is fit-tested and ready to ship.
-          </p>
+          <h1>{headline}</h1>
+          <p>{subcopy}</p>
           <div className="hero__actions">
             <button className="primary" type="button" onClick={onPrimaryAction}>
-              Explore the edit
+              {primaryCta}
             </button>
-            <button className="secondary" type="button">
+            <button className="secondary" type="button" onClick={onSecondaryAction}>
               Book a fitting call
             </button>
           </div>
