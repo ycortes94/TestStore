@@ -22,6 +22,7 @@ import {
   setUserId,
   track,
 } from '@amplitude/unified'
+import { getPlatformEventFields } from './platform'
 
 /** Unified’s public `SessionReplayOptions` comes from standalone SR types and omits plugin-only flags; runtime accepts them (see Session Replay plugin docs). */
 type UnifiedSessionReplayConfig = NonNullable<NonNullable<Parameters<typeof initAll>[1]>['sessionReplay']>
@@ -142,6 +143,10 @@ export const initAnalytics = async (): Promise<void> => {
       forceSessionTracking: true,
       // Fallback when client-side routing does not go through History API alone (SPA).
       enableUrlChangePolling: true,
+      // Mask PII inputs marked with data-amp-mask / .amp-mask (newsletter, notify me, fitting call).
+      privacyConfig: {
+        maskSelector: ['.amp-mask', 'input[type="email"]', 'input[data-amp-mask]', '[data-amp-mask]'],
+      },
       ...(sessionReplayDebugMode ? { debugMode: true } : {}),
     } as UnifiedSessionReplayConfig,
   })
@@ -210,7 +215,8 @@ export const trackEvent = (eventType: string, eventProperties?: EventProperties)
   }
 
   const e2e = getE2eSimulationProps()
-  void track(eventType, { ...eventProperties, ...e2e })
+  const platform = getPlatformEventFields()
+  void track(eventType, { ...platform, ...eventProperties, ...e2e })
 }
 
 export const isAnalyticsEnabled = (): boolean => hasInitialized

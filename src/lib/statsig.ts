@@ -1,4 +1,5 @@
 import { StableID, StatsigClient } from '@statsig/js-client'
+import { getPlatformEventFields, getPlatformInfo } from './platform'
 
 /**
  * Statsig metadata values must be strings on the wire; arrays/objects (e.g. purchased items)
@@ -57,6 +58,8 @@ export const initStatsig = async (): Promise<StatsigClient | null> => {
   // Anonymous storefront: randomize gates/experiments on Statsig's persisted stableID.
   // Gates with idType "stableID" require it on user.customIDs (not only in SDK storage).
   const stableID = StableID.get(STATSIG_CLIENT_KEY)
+  const platformFields = getPlatformEventFields()
+  const platformInfo = getPlatformInfo()
   const tierOverride = import.meta.env.VITE_STATSIG_TIER
   const environment =
     typeof tierOverride === 'string' && tierOverride.trim() !== ''
@@ -69,6 +72,11 @@ export const initStatsig = async (): Promise<StatsigClient | null> => {
     STATSIG_CLIENT_KEY,
     {
       customIDs: stableID ? { stableID } : undefined,
+      // Used by Dynamic Config / Gate rules that target custom_field os_family / platform.
+      custom: {
+        ...platformFields,
+      },
+      userAgent: platformInfo.userAgent || undefined,
     },
     environment ? { environment } : null,
   )
@@ -77,14 +85,51 @@ export const initStatsig = async (): Promise<StatsigClient | null> => {
 
   if (import.meta.env.DEV) {
     const experiment = instance.getExperiment('hero_copy_test')
+    const recs = instance.getExperiment('pdp_recs_test')
+    const shipping = instance.getExperiment('checkout_shipping_test')
+    const promo = instance.getDynamicConfig('cart_promo_rules')
+    const freeShipping = instance.getDynamicConfig('free_shipping_rules')
+    const platformBanner = instance.getDynamicConfig('platform_promo_banner')
     const context = instance.getContext()
     console.info('[Statsig] environment tier:', context.options?.environment?.tier ?? 'production (default)')
     console.info('[Statsig] Use this stableID for experiment overrides:', context.stableID)
+    console.info('[Statsig] platform (user.custom + events):', platformFields)
     console.info('[Statsig] hero_copy_test evaluation:', {
       groupName: experiment.groupName,
       reason: experiment.details.reason,
       hero_headline: experiment.get('hero_headline', null),
       hero_primary_cta: experiment.get('hero_primary_cta', null),
+    })
+    console.info('[Statsig] pdp_recs_test evaluation:', {
+      groupName: recs.groupName,
+      reason: recs.details.reason,
+      recs_headline: recs.get('recs_headline', null),
+      recs_layout: recs.get('recs_layout', null),
+    })
+    console.info('[Statsig] checkout_shipping_test evaluation:', {
+      groupName: shipping.groupName,
+      reason: shipping.details.reason,
+      express_label: shipping.get('express_label', null),
+      emphasize_express: shipping.get('emphasize_express', null),
+    })
+    console.info('[Statsig] cart_promo_rules:', {
+      reason: promo.details.reason,
+      threshold_usd: promo.get('threshold_usd', null),
+      discount_percent: promo.get('discount_percent', null),
+    })
+    console.info('[Statsig] free_shipping_rules:', {
+      reason: freeShipping.details.reason,
+      threshold_usd: freeShipping.get('threshold_usd', null),
+    })
+    console.info('[Statsig] platform_promo_banner:', {
+      reason: platformBanner.details.reason,
+      banner_eyebrow: platformBanner.get('banner_eyebrow', null),
+      banner_text: platformBanner.get('banner_text', null),
+    })
+    console.info('[Statsig] gates:', {
+      show_cart_coupon_15: instance.checkGate('show_cart_coupon_15'),
+      show_low_stock_urgency: instance.checkGate('show_low_stock_urgency'),
+      show_newsletter_modal: instance.checkGate('show_newsletter_modal'),
     })
   }
 
@@ -108,7 +153,9 @@ export const logStatsigEvent = (
     return
   }
 
-  const metadata: Record<string, string> = {}
+  // Always attach platform fields so Pulse / exports can slice iPhone vs Android.
+  const platformFields = getPlatformEventFields()
+  const metadata: Record<string, string> = { ...platformFields }
   for (const [key, raw] of Object.entries(properties ?? {})) {
     if (raw === undefined || raw === null) {
       continue

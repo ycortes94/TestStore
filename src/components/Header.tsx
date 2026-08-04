@@ -6,18 +6,20 @@ type HeaderProps = {
   activeTab: NavTabId
   onTabChange: (tab: NavTabId) => void
   onOpenCart: () => void
+  onOpenProfile?: () => void
+  onGoHome?: () => void
 }
 
-const Header = ({ cartCount, activeTab, onTabChange, onOpenCart }: HeaderProps) => {
+const Header = ({ cartCount, activeTab, onTabChange, onOpenCart, onOpenProfile, onGoHome }: HeaderProps) => {
   return (
     <header className="app-header">
-      <div className="app-header__brand">
+      <button className="app-header__brand" type="button" onClick={onGoHome}>
         <span className="app-header__logo">TS</span>
         <div>
           <p className="eyebrow">Test Store</p>
           <strong>Essential gear for daily movement</strong>
         </div>
-      </div>
+      </button>
 
       <nav className="app-header__nav" aria-label="Main">
         <div role="tablist" className="app-header__tabs" aria-orientation="horizontal">
@@ -39,8 +41,8 @@ const Header = ({ cartCount, activeTab, onTabChange, onOpenCart }: HeaderProps) 
       </nav>
 
       <div className="app-header__actions">
-        <button className="pill-button" type="button">
-          <span role="img" aria-label="account">
+        <button className="pill-button" type="button" onClick={onOpenProfile} aria-label="This device profile">
+          <span role="img" aria-label="profile">
             🙂
           </span>
         </button>

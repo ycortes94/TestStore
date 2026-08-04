@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useModalA11y } from '../hooks/useModalA11y'
 
 const TIME_SLOTS = [
   { value: '09:00', label: '9:00 AM' },
@@ -48,6 +49,12 @@ const FittingCallModal = ({ open, onDismiss, onSchedule }: FittingCallModalProps
     setScheduled(false)
   }, [open])
 
+  const handleDismiss = useCallback(() => {
+    onDismiss(scheduled ? 'completed' : 'cancel')
+  }, [onDismiss, scheduled])
+
+  useModalA11y(open, handleDismiss)
+
   if (!open) {
     return null
   }
@@ -75,7 +82,7 @@ const FittingCallModal = ({ open, onDismiss, onSchedule }: FittingCallModalProps
     TIME_SLOTS.find((slot) => slot.value === form.preferredTime)?.label ?? form.preferredTime
 
   return (
-    <div className="checkout-modal-backdrop" role="presentation" onClick={() => onDismiss('cancel')}>
+    <div className="checkout-modal-backdrop" role="presentation" onClick={handleDismiss}>
       <div
         className="checkout-modal fitting-call-modal"
         role="dialog"
@@ -118,6 +125,9 @@ const FittingCallModal = ({ open, onDismiss, onSchedule }: FittingCallModalProps
                   name="name"
                   autoComplete="name"
                   required
+                  data-autofocus
+                  data-amp-mask="true"
+                  className="amp-mask"
                   value={form.name}
                   onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
                   placeholder="Alex Rivera"
@@ -131,6 +141,8 @@ const FittingCallModal = ({ open, onDismiss, onSchedule }: FittingCallModalProps
                   name="email"
                   autoComplete="email"
                   required
+                  data-amp-mask="true"
+                  className="amp-mask"
                   value={form.email}
                   onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
                   placeholder="you@example.com"

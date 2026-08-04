@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import { StatsigProvider } from '@statsig/react-bindings'
 import './index.css'
 import App from './App.tsx'
@@ -20,7 +21,11 @@ void (async () => {
     console.error('Statsig SDK init failed', error)
   }
 
-  const app = <App />
+  const app = (
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  )
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

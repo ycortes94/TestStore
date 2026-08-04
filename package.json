@@ -19,7 +19,8 @@
     "@statsig/js-client": "^3.33.3",
     "@statsig/react-bindings": "^3.33.3",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.18.2"
   },
   "optionalDependencies": {
     "@rollup/rollup-darwin-arm64": "^4.53.3"

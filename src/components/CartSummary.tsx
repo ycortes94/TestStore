@@ -1,6 +1,8 @@
 import { useGateValue } from '@statsig/react-bindings'
 import CouponPanel from './CouponPanel'
-import { COUPON_GATE, COUPON_PERCENT, getCouponBreakdown } from '../lib/coupon'
+import FreeShippingBanner from './FreeShippingBanner'
+import { useCartPromoRules } from '../hooks/useCartPromoRules'
+import { COUPON_GATE, getCouponBreakdown } from '../lib/coupon'
 import type { CartItem } from '../types'
 
 type CartSummaryProps = {
@@ -14,7 +16,8 @@ type CartSummaryProps = {
 
 const CartSummary = ({ items, total, onIncrement, onDecrement, onClear, onBeginCheckout }: CartSummaryProps) => {
   const couponFeatureEnabled = useGateValue(COUPON_GATE)
-  const coupon = getCouponBreakdown(total, couponFeatureEnabled)
+  const promoRules = useCartPromoRules()
+  const coupon = getCouponBreakdown(total, couponFeatureEnabled, promoRules)
 
   return (
     <aside className="cart-summary">
@@ -27,6 +30,8 @@ const CartSummary = ({ items, total, onIncrement, onDecrement, onClear, onBeginC
           Clear
         </button>
       </header>
+
+      <FreeShippingBanner subtotal={total} hasItems={items.length > 0} source="cart_summary" />
 
       {items.length === 0 ? (
         <p className="muted">Add a few products to see them here.</p>
@@ -43,7 +48,12 @@ const CartSummary = ({ items, total, onIncrement, onDecrement, onClear, onBeginC
                   −
                 </button>
                 <span>{quantity}</span>
-                <button type="button" onClick={() => onIncrement(product.id)} aria-label={`Add one ${product.name}`}>
+                <button
+                  type="button"
+                  onClick={() => onIncrement(product.id)}
+                  aria-label={`Add one ${product.name}`}
+                  disabled={product.stock > 0 ? quantity >= product.stock : true}
+                >
                   +
                 </button>
               </div>
@@ -52,7 +62,12 @@ const CartSummary = ({ items, total, onIncrement, onDecrement, onClear, onBeginC
         </ul>
       )}
 
-      <CouponPanel featureEnabled={couponFeatureEnabled} hasItems={items.length > 0} breakdown={coupon} />
+      <CouponPanel
+        featureEnabled={couponFeatureEnabled}
+        hasItems={items.length > 0}
+        breakdown={coupon}
+        rules={promoRules}
+      />
 
       <div className="cart-summary__totals">
         <div className="cart-summary__total">
@@ -62,7 +77,7 @@ const CartSummary = ({ items, total, onIncrement, onDecrement, onClear, onBeginC
         {coupon.eligible && (
           <>
             <div className="cart-summary__total cart-summary__total--discount">
-              <span>Coupon ({COUPON_PERCENT}% off)</span>
+              <span>Coupon ({promoRules.discountPercent}% off)</span>
               <strong>−${coupon.discountAmount.toFixed(2)}</strong>
             </div>
             <div className="cart-summary__total">

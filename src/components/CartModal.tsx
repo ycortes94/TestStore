@@ -1,6 +1,12 @@
+import { useCallback } from 'react'
 import { useGateValue } from '@statsig/react-bindings'
 import CouponPanel from './CouponPanel'
-import { COUPON_GATE, COUPON_PERCENT, getCouponBreakdown } from '../lib/coupon'
+import FreeShippingBanner from './FreeShippingBanner'
+import { useCartPromoRules } from '../hooks/useCartPromoRules'
+import { useFreeShippingRules } from '../hooks/useFreeShippingRules'
+import { useModalA11y } from '../hooks/useModalA11y'
+import { COUPON_GATE, getCouponBreakdown } from '../lib/coupon'
+import { STANDARD_SHIPPING_USD, getFreeShippingBreakdown } from '../lib/shipping'
 import type { CartItem } from '../types'
 
 type CartModalProps = {
@@ -13,7 +19,8 @@ type CartModalProps = {
   onIncrement: (productId: string) => void
   onDecrement: (productId: string) => void
   onClear: () => void
-  onConfirmPurchase: () => void
+  /** Routes to full checkout so shipping is selected and totals stay honest. */
+  onBeginCheckout: () => void
 }
 
 const CartModal = ({
@@ -26,18 +33,30 @@ const CartModal = ({
   onIncrement,
   onDecrement,
   onClear,
-  onConfirmPurchase,
+  onBeginCheckout,
 }: CartModalProps) => {
   const couponFeatureEnabled = useGateValue(COUPON_GATE)
-  const coupon = getCouponBreakdown(total, couponFeatureEnabled)
+  const promoRules = useCartPromoRules()
+  const freeShippingRules = useFreeShippingRules()
+  const coupon = getCouponBreakdown(total, couponFeatureEnabled, promoRules)
+  const freeShipping = getFreeShippingBreakdown(total, freeShippingRules)
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
+  const estimatedShipping = freeShipping.unlocked ? 0 : STANDARD_SHIPPING_USD
+  const merchandiseTotal = coupon.eligible ? coupon.totalAfterDiscount : total
+  const estimatedTotal = merchandiseTotal + estimatedShipping
+
+  const handleDismiss = useCallback(() => {
+    onDismiss()
+  }, [onDismiss])
+
+  useModalA11y(open, handleDismiss)
 
   if (!open) {
     return null
   }
 
   return (
-    <div className="checkout-modal-backdrop" role="presentation" onClick={onDismiss}>
+    <div className="checkout-modal-backdrop" role="presentation" onClick={handleDismiss}>
       <div
         className="checkout-modal cart-modal"
         role="dialog"
@@ -53,7 +72,7 @@ const CartModal = ({
               <p className="muted">We&apos;ll send a confirmation shortly. Your total was ${purchasedTotal.toFixed(2)}.</p>
             </header>
             <div className="checkout-modal__actions">
-              <button className="primary full-width" type="button" onClick={onDismiss}>
+              <button className="primary full-width" type="button" data-autofocus onClick={handleDismiss}>
                 Back to shopping
               </button>
             </div>
@@ -73,40 +92,51 @@ const CartModal = ({
               </button>
             </header>
 
+            <FreeShippingBanner subtotal={total} hasItems={items.length > 0} source="cart_modal" />
+
             {items.length === 0 ? (
               <p className="muted">Add a few products, then open your bag to check out.</p>
             ) : (
               <ul className="cart-summary__list cart-modal__list">
-                {items.map(({ product, quantity }) => (
-                  <li key={product.id}>
-                    <div>
-                      <strong>{product.name}</strong>
-                      <span>{`$${product.price} · ${product.collections[0]}`}</span>
-                      <span className="cart-modal__line-total">${(product.price * quantity).toFixed(2)}</span>
-                    </div>
-                    <div className="cart-summary__quantity">
-                      <button
-                        type="button"
-                        onClick={() => onDecrement(product.id)}
-                        aria-label={`Remove one ${product.name}`}
-                      >
-                        −
-                      </button>
-                      <span>{quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => onIncrement(product.id)}
-                        aria-label={`Add one ${product.name}`}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {items.map(({ product, quantity }) => {
+                  const atStock = product.stock > 0 && quantity >= product.stock
+                  return (
+                    <li key={product.id}>
+                      <div>
+                        <strong>{product.name}</strong>
+                        <span>{`$${product.price} · ${product.collections[0]}`}</span>
+                        <span className="cart-modal__line-total">${(product.price * quantity).toFixed(2)}</span>
+                      </div>
+                      <div className="cart-summary__quantity">
+                        <button
+                          type="button"
+                          onClick={() => onDecrement(product.id)}
+                          aria-label={`Remove one ${product.name}`}
+                        >
+                          −
+                        </button>
+                        <span>{quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => onIncrement(product.id)}
+                          aria-label={`Add one ${product.name}`}
+                          disabled={atStock || product.stock === 0}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             )}
 
-            <CouponPanel featureEnabled={couponFeatureEnabled} hasItems={items.length > 0} breakdown={coupon} />
+            <CouponPanel
+              featureEnabled={couponFeatureEnabled}
+              hasItems={items.length > 0}
+              breakdown={coupon}
+              rules={promoRules}
+            />
 
             <div className="cart-summary__totals checkout-modal__totals">
               <div className="cart-summary__total">
@@ -114,36 +144,41 @@ const CartModal = ({
                 <strong>${total.toFixed(2)}</strong>
               </div>
               {coupon.eligible && (
-                <>
-                  <div className="cart-summary__total cart-summary__total--discount">
-                    <span>Coupon ({COUPON_PERCENT}% off)</span>
-                    <strong>−${coupon.discountAmount.toFixed(2)}</strong>
-                  </div>
-                  <div className="cart-summary__total">
-                    <span>Total</span>
-                    <strong>${coupon.totalAfterDiscount.toFixed(2)}</strong>
-                  </div>
-                </>
+                <div className="cart-summary__total cart-summary__total--discount">
+                  <span>Coupon ({promoRules.discountPercent}% off)</span>
+                  <strong>−${coupon.discountAmount.toFixed(2)}</strong>
+                </div>
+              )}
+              {items.length > 0 && (
+                <div className="cart-summary__total">
+                  <span>Est. standard shipping</span>
+                  <strong>{estimatedShipping === 0 ? 'Free' : `$${estimatedShipping.toFixed(2)}`}</strong>
+                </div>
+              )}
+              {items.length > 0 && (
+                <div className="cart-summary__total">
+                  <span>Est. total</span>
+                  <strong>${estimatedTotal.toFixed(2)}</strong>
+                </div>
               )}
             </div>
 
             <div className="checkout-modal__actions">
-              <button className="secondary full-width" type="button" onClick={onDismiss}>
+              <button className="secondary full-width" type="button" onClick={handleDismiss}>
                 Keep shopping
               </button>
               <button
                 className="primary full-width"
                 type="button"
+                data-autofocus
                 disabled={!items.length}
-                onClick={onConfirmPurchase}
+                onClick={onBeginCheckout}
               >
-                Place order
-                {items.length > 0
-                  ? ` · $${(coupon.eligible ? coupon.totalAfterDiscount : total).toFixed(2)}`
-                  : ''}
+                Continue to checkout
+                {items.length > 0 ? ` · $${estimatedTotal.toFixed(2)}` : ''}
               </button>
             </div>
-            <p className="microcopy">Free returns within 60 days. Taxes calculated at checkout.</p>
+            <p className="microcopy">Choose shipping at checkout. Free returns within 60 days.</p>
           </>
         )}
       </div>

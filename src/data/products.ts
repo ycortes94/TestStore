@@ -34,7 +34,7 @@ export const products: Product[] = [
     price: 168,
     rating: 4.9,
     reviews: 98,
-    stock: 9,
+    stock: 4,
     category: 'Apparel',
     collections: ['Minimal Luxe'],
     image: 'https://images.unsplash.com/photo-1503341455253-b2e723bb3dbb?auto=format&fit=crop&w=900&q=80',

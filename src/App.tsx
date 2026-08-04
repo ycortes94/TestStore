@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useGateValue } from '@statsig/react-bindings'
+import { Link, Route, Routes, useNavigate } from 'react-router-dom'
 import './App.css'
 import Header from './components/Header'
 import Hero from './components/Hero'
@@ -9,26 +9,31 @@ import CartSummary from './components/CartSummary'
 import CartModal from './components/CartModal'
 import CheckoutModal from './components/CheckoutModal'
 import FittingCallModal, { type FittingCallRequest } from './components/FittingCallModal'
+import NewsletterModal from './components/NewsletterModal'
+import PlatformPromoBanner from './components/PlatformPromoBanner'
+import StatsigLab from './components/StatsigLab'
 import Perks from './components/Perks'
 import Testimonials from './components/Testimonials'
 import Footer from './components/Footer'
 import { maxPrice, minPrice, products as catalogProducts } from './data/products'
 import { NAV_TABS, isShoppingTab, type NavTabId } from './nav'
-import type { Kit } from './pages/StudioKitsPage'
 import BestSellersPage, { type BestSellerSort } from './pages/BestSellersPage'
 import JournalPage from './pages/JournalPage'
 import NewArrivalsIntro from './pages/NewArrivalsIntro'
+import ProductDetailPage from './pages/ProductDetailPage'
+import ProfilePage from './pages/ProfilePage'
 import StudioKitsPage from './pages/StudioKitsPage'
 import SupportPage from './pages/SupportPage'
-import type { CartItem, Product, SortOption } from './types'
+import type { SortOption } from './types'
 import { trackEvent } from './lib/analytics'
-import { COUPON_GATE, getCouponBreakdown } from './lib/coupon'
 import { logStatsigEvent } from './lib/statsig'
+import { StoreProvider, useStore } from './store/StoreContext'
 
 const categories = ['All', ...new Set(catalogProducts.map((product) => product.category))]
 const productOrder = new Map(catalogProducts.map((product, index) => [product.id, index] as const))
 
-function App() {
+const StoreShell = () => {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<NavTabId>('new-arrivals')
   const [newDropsOnly, setNewDropsOnly] = useState(false)
   const [bestSellerSort, setBestSellerSort] = useState<BestSellerSort>('featured')
@@ -37,21 +42,36 @@ function App() {
   const [priceCap, setPriceCap] = useState(maxPrice)
   const [onlyInStock, setOnlyInStock] = useState(false)
   const [sortOption, setSortOption] = useState<SortOption>('featured')
-  const [cart, setCart] = useState<Record<string, CartItem>>({})
-  const [cartModalOpen, setCartModalOpen] = useState(false)
-  const [checkoutOpen, setCheckoutOpen] = useState(false)
-  const [fittingCallOpen, setFittingCallOpen] = useState(false)
-  const [checkoutComplete, setCheckoutComplete] = useState(false)
-  const [purchasedTotal, setPurchasedTotal] = useState(0)
   const catalogRef = useRef<HTMLElement | null>(null)
   const hasLoggedHomeView = useRef(false)
-  const couponFeatureEnabled = useGateValue(COUPON_GATE)
+
+  const {
+    cartItems,
+    cartCount,
+    cartTotal,
+    cartModalOpen,
+    checkoutOpen,
+    fittingCallOpen,
+    checkoutComplete,
+    purchasedTotal,
+    openCart,
+    dismissCartModal,
+    beginCheckout,
+    dismissCheckout,
+    openFittingCall,
+    dismissFittingCall,
+    addToCart,
+    increment,
+    decrement,
+    clearCart,
+    addKit,
+    confirmPurchase,
+  } = useStore()
 
   useEffect(() => {
     if (hasLoggedHomeView.current) {
       return
     }
-
     hasLoggedHomeView.current = true
     trackEvent('home_viewed', { totalProducts: catalogProducts.length })
   }, [])
@@ -100,10 +120,6 @@ function App() {
     [],
   )
 
-  const cartItems = Object.values(cart)
-  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
-  const cartTotal = cartItems.reduce((sum, item) => sum + item.quantity * item.product.price, 0)
-
   const checkoutLineItems = useMemo(
     () =>
       cartItems.map(({ product, quantity }) => ({
@@ -122,6 +138,7 @@ function App() {
       ctaType: 'nav_tab',
     })
     setActiveTab(tab)
+    navigate('/')
   }
 
   const scrollToCatalog = () => {
@@ -145,7 +162,7 @@ function App() {
     })
     trackEvent('fitting_call_modal_opened', { source: 'hero_secondary' })
     logStatsigEvent('fitting_call_modal_opened', undefined, { source: 'hero_secondary' })
-    setFittingCallOpen(true)
+    openFittingCall()
   }
 
   const handleDismissFittingCall = (reason: 'cancel' | 'completed') => {
@@ -153,7 +170,7 @@ function App() {
       trackEvent('fitting_call_modal_dismissed', { source: 'fitting_call_modal' })
       logStatsigEvent('fitting_call_modal_dismissed', undefined, { source: 'fitting_call_modal' })
     }
-    setFittingCallOpen(false)
+    dismissFittingCall()
   }
 
   const handleScheduleFittingCall = (request: FittingCallRequest) => {
@@ -180,367 +197,170 @@ function App() {
     })
   }
 
-  const handleCategoryChange = (category: string) => {
-    setActiveCategory(category)
-    trackEvent('filter_category_selected', { category })
-  }
-
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value)
-    trackEvent('filter_search_updated', { queryLength: value.trim().length })
-  }
-
-  const handlePriceChange = (value: number) => {
-    setPriceCap(value)
-    trackEvent('filter_price_cap_changed', { priceCap: value })
-  }
-
-  const handleStockToggle = (value: boolean) => {
-    setOnlyInStock(value)
-    trackEvent('filter_stock_toggled', { onlyInStock: value })
-  }
-
-  const handleSortChange = (value: SortOption) => {
-    setSortOption(value)
-    trackEvent('sort_changed', { sortOption: value })
-  }
-
-  const handleAddToCart = (product: Product) => {
-    if (product.stock === 0) return
-    let quantityAfterUpdate = 0
-    setCart((current) => {
-      const existing = current[product.id]
-      const quantity = existing ? existing.quantity + 1 : 1
-      quantityAfterUpdate = quantity
-      return {
-        ...current,
-        [product.id]: {
-          product,
-          quantity,
-        },
-      }
-    })
-
-    if (quantityAfterUpdate > 0) {
-      trackEvent('cart_item_added', {
-        productId: product.id,
-        name: product.name,
-        category: product.category,
-        price: product.price,
-        quantity: quantityAfterUpdate,
-      })
-      logStatsigEvent('add_to_cart', product.price, {
-        productId: product.id,
-        name: product.name,
-        category: product.category,
-        price: product.price,
-        quantity: quantityAfterUpdate,
-      })
-    }
-  }
-
-  const handleIncrement = (productId: string) => {
-    let nextQuantity = 0
-    let productName = ''
-    setCart((current) => {
-      const existing = current[productId]
-      if (!existing) return current
-      nextQuantity = existing.quantity + 1
-      productName = existing.product.name
-      return {
-        ...current,
-        [productId]: { ...existing, quantity: nextQuantity },
-      }
-    })
-
-    if (nextQuantity > 0) {
-      trackEvent('cart_item_incremented', { productId, name: productName, quantity: nextQuantity })
-    }
-  }
-
-  const handleDecrement = (productId: string) => {
-    let nextQuantity = 0
-    let removed = false
-    let productName = ''
-    setCart((current) => {
-      const existing = current[productId]
-      if (!existing) return current
-      productName = existing.product.name
-      if (existing.quantity === 1) {
-        const nextCart = { ...current }
-        delete nextCart[productId]
-        removed = true
-        return nextCart
-      }
-      nextQuantity = existing.quantity - 1
-      return {
-        ...current,
-        [productId]: { ...existing, quantity: nextQuantity },
-      }
-    })
-
-    if (removed) {
-      trackEvent('cart_item_removed', { productId, name: productName })
-      return
-    }
-
-    if (nextQuantity > 0) {
-      trackEvent('cart_item_decremented', { productId, name: productName, quantity: nextQuantity })
-    }
-  }
-
-  const handleClearCart = () => {
-    const uniqueProducts = cartItems.length
-    const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
-    setCart({})
-
-    if (totalItems > 0) {
-      trackEvent('cart_cleared', { uniqueProducts, totalItems })
-    }
-  }
-
-  const handleOpenCart = () => {
-    trackEvent('bag_opened', {
-      subtotal: cartTotal,
-      uniqueProducts: cartItems.length,
-      totalUnits: cartCount,
-      source: 'header',
-    })
-    logStatsigEvent('bag_opened', cartTotal, {
-      subtotal: cartTotal,
-      uniqueProducts: cartItems.length,
-      totalUnits: cartCount,
-      source: 'header',
-    })
-    logStatsigEvent('cta_clicked', undefined, {
-      cta: 'bag',
-      ctaLabel: 'Bag',
-      ctaType: 'header',
-      cartCount,
-    })
-    setCheckoutComplete(false)
-    setCheckoutOpen(false)
-    setCartModalOpen(true)
-  }
-
-  const handleBeginCheckout = () => {
-    const coupon = getCouponBreakdown(cartTotal, couponFeatureEnabled)
-    trackEvent('checkout_started', {
-      subtotal: cartTotal,
-      uniqueProducts: cartItems.length,
-      totalUnits: cartCount,
-      couponApplied: coupon.eligible,
-      discountAmount: coupon.discountAmount,
-    })
-    logStatsigEvent('checkout_started', cartTotal, {
-      subtotal: cartTotal,
-      uniqueProducts: cartItems.length,
-      totalUnits: cartCount,
-      couponApplied: coupon.eligible,
-      discountAmount: coupon.discountAmount,
-      source: 'cart_summary',
-    })
-    setCheckoutComplete(false)
-    setCartModalOpen(false)
-    setCheckoutOpen(true)
-  }
-
-  const handleConfirmPurchase = (source: 'cart_modal' | 'checkout_modal' = 'checkout_modal') => {
-    if (cartItems.length === 0) {
-      return
-    }
-
-    const coupon = getCouponBreakdown(cartTotal, couponFeatureEnabled)
-    const orderTotal = coupon.totalAfterDiscount
-    const uniqueProducts = cartItems.length
-    const totalUnits = cartCount
-    const items = cartItems.map(({ product, quantity }) => ({
-      id: product.id,
-      name: product.name,
-      quantity,
-      price: product.price,
-    }))
-
-    if (source === 'cart_modal') {
-      trackEvent('checkout_started', {
-        subtotal: cartTotal,
-        uniqueProducts,
-        totalUnits,
-        couponApplied: coupon.eligible,
-        discountAmount: coupon.discountAmount,
-        source,
-      })
-      logStatsigEvent('checkout_started', cartTotal, {
-        subtotal: cartTotal,
-        uniqueProducts,
-        totalUnits,
-        couponApplied: coupon.eligible,
-        discountAmount: coupon.discountAmount,
-        source,
-      })
-    }
-
-    setPurchasedTotal(orderTotal)
-    trackEvent('purchase_completed', {
-      orderTotal,
-      subtotal: cartTotal,
-      uniqueProducts,
-      totalUnits,
-      couponApplied: coupon.eligible,
-      discountAmount: coupon.discountAmount,
-      source,
-    })
-    logStatsigEvent('purchase', orderTotal, {
-      items,
-      uniqueProducts,
-      totalUnits,
-      subtotal: cartTotal,
-      couponApplied: coupon.eligible,
-      discountAmount: coupon.discountAmount,
-      source,
-    })
-    setCart({})
-    setCheckoutComplete(true)
-  }
-
-  const handleDismissCartModal = () => {
-    setCartModalOpen(false)
-    setCheckoutComplete(false)
-  }
-
-  const handleDismissCheckout = () => {
-    setCheckoutOpen(false)
-    setCheckoutComplete(false)
-  }
-
-  const handleAddKit = (kit: Kit, items: Product[]) => {
-    trackEvent('studio_kit_added', {
-      kitId: kit.id,
-      name: kit.name,
-      pieceCount: items.length,
-    })
-    logStatsigEvent('studio_kit_added', undefined, {
-      kitId: kit.id,
-      name: kit.name,
-      pieceCount: items.length,
-      items: items.map((product) => ({ id: product.id, name: product.name, price: product.price })),
-    })
-    setCart((current) => {
-      let next = { ...current }
-      for (const product of items) {
-        if (product.stock === 0) {
-          continue
-        }
-        const existing = next[product.id]
-        const quantity = existing ? existing.quantity + 1 : 1
-        next = {
-          ...next,
-          [product.id]: { product, quantity },
-        }
-      }
-      return next
-    })
-  }
-
   return (
     <div className="app-shell">
       <Header
         cartCount={cartCount}
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        onOpenCart={handleOpenCart}
+        onOpenCart={openCart}
+        onOpenProfile={() => {
+          trackEvent('profile_nav_clicked', { source: 'header' })
+          logStatsigEvent('cta_clicked', undefined, {
+            cta: 'account',
+            ctaLabel: 'Account',
+            ctaType: 'header',
+          })
+          navigate('/profile')
+        }}
+        onGoHome={() => navigate('/')}
       />
 
-      {isShoppingTab(activeTab) && (
-        <Hero
-          totalProducts={catalogProducts.length}
-          onPrimaryAction={scrollToCatalog}
-          onSecondaryAction={handleBookFittingCall}
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <>
+              {isShoppingTab(activeTab) && (
+                <Hero
+                  totalProducts={catalogProducts.length}
+                  onPrimaryAction={scrollToCatalog}
+                  onSecondaryAction={handleBookFittingCall}
+                />
+              )}
+
+              {isShoppingTab(activeTab) && <PlatformPromoBanner onCta={scrollToCatalog} />}
+
+              <main ref={catalogRef} id="main-tab-panel" role="tabpanel" aria-live="polite">
+                {activeTab === 'new-arrivals' && (
+                  <>
+                    <NewArrivalsIntro newDropsOnly={newDropsOnly} onNewDropsOnlyChange={setNewDropsOnly} />
+                    <FilterPanel
+                      categories={categories}
+                      activeCategory={activeCategory}
+                      onCategoryChange={(category) => {
+                        setActiveCategory(category)
+                        trackEvent('filter_category_selected', { category })
+                      }}
+                      searchTerm={searchTerm}
+                      onSearchChange={(value) => {
+                        setSearchTerm(value)
+                        trackEvent('filter_search_updated', { queryLength: value.trim().length })
+                      }}
+                      priceCap={priceCap}
+                      minPrice={minPrice}
+                      maxPrice={maxPrice}
+                      onPriceChange={(value) => {
+                        setPriceCap(value)
+                        trackEvent('filter_price_cap_changed', { priceCap: value })
+                      }}
+                      onlyInStock={onlyInStock}
+                      onStockToggle={(value) => {
+                        setOnlyInStock(value)
+                        trackEvent('filter_stock_toggled', { onlyInStock: value })
+                      }}
+                      sortOption={sortOption}
+                      onSortChange={(value) => {
+                        setSortOption(value)
+                        trackEvent('sort_changed', { sortOption: value })
+                      }}
+                    />
+                    <div className="content-columns">
+                      <div className="shop-column">
+                        <ProductGrid products={newArrivalsProducts} onAddToCart={(product) => addToCart(product)} />
+                      </div>
+                      <CartSummary
+                        items={cartItems}
+                        total={cartTotal}
+                        onIncrement={increment}
+                        onDecrement={decrement}
+                        onClear={clearCart}
+                        onBeginCheckout={beginCheckout}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {activeTab === 'best-sellers' && (
+                  <div className="content-columns">
+                    <div className="shop-column">
+                      <BestSellersPage
+                        products={bestSellerProducts}
+                        sort={bestSellerSort}
+                        onSortChange={setBestSellerSort}
+                        onAddToCart={(product) => addToCart(product)}
+                      />
+                    </div>
+                    <CartSummary
+                      items={cartItems}
+                      total={cartTotal}
+                      onIncrement={increment}
+                      onDecrement={decrement}
+                      onClear={clearCart}
+                      onBeginCheckout={beginCheckout}
+                    />
+                  </div>
+                )}
+
+                {activeTab === 'studio-kits' && (
+                  <div className="content-columns">
+                    <div className="shop-column">
+                      <StudioKitsPage onAddKit={addKit} />
+                    </div>
+                    <CartSummary
+                      items={cartItems}
+                      total={cartTotal}
+                      onIncrement={increment}
+                      onDecrement={decrement}
+                      onClear={clearCart}
+                      onBeginCheckout={beginCheckout}
+                    />
+                  </div>
+                )}
+
+                {activeTab === 'journal' && <JournalPage />}
+                {activeTab === 'support' && <SupportPage />}
+              </main>
+
+              {isShoppingTab(activeTab) && (
+                <>
+                  <Perks />
+                  <Testimonials />
+                </>
+              )}
+            </>
+          }
         />
-      )}
-
-      <main ref={catalogRef} id="main-tab-panel" role="tabpanel" aria-live="polite">
-        {activeTab === 'new-arrivals' && (
-          <>
-            <NewArrivalsIntro newDropsOnly={newDropsOnly} onNewDropsOnlyChange={setNewDropsOnly} />
-            <FilterPanel
-              categories={categories}
-              activeCategory={activeCategory}
-              onCategoryChange={handleCategoryChange}
-              searchTerm={searchTerm}
-              onSearchChange={handleSearchChange}
-              priceCap={priceCap}
-              minPrice={minPrice}
-              maxPrice={maxPrice}
-              onPriceChange={handlePriceChange}
-              onlyInStock={onlyInStock}
-              onStockToggle={handleStockToggle}
-              sortOption={sortOption}
-              onSortChange={handleSortChange}
-            />
-            <div className="content-columns">
-              <div className="shop-column">
-                <ProductGrid products={newArrivalsProducts} onAddToCart={handleAddToCart} />
-              </div>
-              <CartSummary
-                items={cartItems}
-                total={cartTotal}
-                onIncrement={handleIncrement}
-                onDecrement={handleDecrement}
-                onClear={handleClearCart}
-                onBeginCheckout={handleBeginCheckout}
-              />
-            </div>
-          </>
-        )}
-
-        {activeTab === 'best-sellers' && (
-          <div className="content-columns">
-            <div className="shop-column">
-              <BestSellersPage
-                products={bestSellerProducts}
-                sort={bestSellerSort}
-                onSortChange={setBestSellerSort}
-                onAddToCart={handleAddToCart}
-              />
-            </div>
-            <CartSummary
-              items={cartItems}
-              total={cartTotal}
-              onIncrement={handleIncrement}
-              onDecrement={handleDecrement}
-              onClear={handleClearCart}
-              onBeginCheckout={handleBeginCheckout}
-            />
-          </div>
-        )}
-
-        {activeTab === 'studio-kits' && (
-          <div className="content-columns">
-            <div className="shop-column">
-              <StudioKitsPage onAddKit={handleAddKit} />
-            </div>
-            <CartSummary
-              items={cartItems}
-              total={cartTotal}
-              onIncrement={handleIncrement}
-              onDecrement={handleDecrement}
-              onClear={handleClearCart}
-              onBeginCheckout={handleBeginCheckout}
-            />
-          </div>
-        )}
-
-        {activeTab === 'journal' && <JournalPage />}
-        {activeTab === 'support' && <SupportPage />}
-      </main>
-
-      {isShoppingTab(activeTab) && (
-        <>
-          <Perks />
-          <Testimonials />
-        </>
-      )}
+        <Route
+          path="/product/:productId"
+          element={
+            <main className="pdp-main">
+              <ProductDetailPage />
+            </main>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <main className="profile-main">
+              <ProfilePage />
+            </main>
+          }
+        />
+        <Route
+          path="*"
+          element={
+            <main className="page-panel">
+              <p className="eyebrow">404</p>
+              <h1>Page not found</h1>
+              <p className="muted">That route isn&apos;t part of this demo store.</p>
+              <Link className="primary" to="/" style={{ display: 'inline-block', textAlign: 'center' }}>
+                Back to store
+              </Link>
+            </main>
+          }
+        />
+      </Routes>
 
       <Footer />
 
@@ -550,11 +370,11 @@ function App() {
         total={cartTotal}
         purchaseComplete={checkoutComplete && cartModalOpen}
         purchasedTotal={purchasedTotal}
-        onDismiss={handleDismissCartModal}
-        onIncrement={handleIncrement}
-        onDecrement={handleDecrement}
-        onClear={handleClearCart}
-        onConfirmPurchase={() => handleConfirmPurchase('cart_modal')}
+        onDismiss={dismissCartModal}
+        onIncrement={increment}
+        onDecrement={decrement}
+        onClear={clearCart}
+        onBeginCheckout={beginCheckout}
       />
 
       <CheckoutModal
@@ -563,8 +383,8 @@ function App() {
         total={cartTotal}
         purchaseComplete={checkoutComplete && checkoutOpen}
         purchasedTotal={purchasedTotal}
-        onDismiss={handleDismissCheckout}
-        onConfirmPurchase={() => handleConfirmPurchase('checkout_modal')}
+        onDismiss={dismissCheckout}
+        onConfirmPurchase={(details) => confirmPurchase({ source: 'checkout_modal', ...details })}
       />
 
       <FittingCallModal
@@ -572,7 +392,18 @@ function App() {
         onDismiss={handleDismissFittingCall}
         onSchedule={handleScheduleFittingCall}
       />
+
+      <NewsletterModal />
+      <StatsigLab />
     </div>
+  )
+}
+
+function App() {
+  return (
+    <StoreProvider>
+      <StoreShell />
+    </StoreProvider>
   )
 }
 
