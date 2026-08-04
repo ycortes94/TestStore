@@ -27,7 +27,7 @@ concurrency:
 jobs:
   simulate:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -48,6 +48,10 @@ jobs:
           CI: true
           SIM_EXPERIMENT_USERS: '8'
           VITE_STATSIG_TIER: production
+          # Keep pacing human-like but leave headroom under the 120s test timeout.
+          PLAYWRIGHT_SLOW_MO: '80'
+          SIM_HUMAN_MIN_MS: '280'
+          SIM_HUMAN_MAX_MS: '700'
           # Create under Repo → Settings → Secrets and variables → Actions
           VITE_STATSIG_CLIENT_KEY: ${{ secrets.VITE_STATSIG_CLIENT_KEY }}
           VITE_AMPLITUDE_API_KEY: ${{ secrets.VITE_AMPLITUDE_API_KEY }}

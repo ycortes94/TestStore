@@ -16,5 +16,7 @@ export VITE_STATSIG_TIER="${VITE_STATSIG_TIER:-production}"
 # Prevent reusing an existing localhost:5173 that might be on development tier.
 export CI="${CI:-true}"
 export PLAYWRIGHT_PORT="${PLAYWRIGHT_PORT:-5180}"
+# Optional pause bounds (GitHub Actions sets tighter values; local keeps defaults in the spec).
+# SIM_HUMAN_MIN_MS / SIM_HUMAN_MAX_MS apply when humanPause() is called without explicit args.
 
 exec npx playwright test tests/customer-simulation.spec.ts "$@"

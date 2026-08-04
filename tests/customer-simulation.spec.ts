@@ -28,11 +28,17 @@ function envMs(key: 'SIM_HUMAN_MIN_MS' | 'SIM_HUMAN_MAX_MS', fallback: number): 
 
 /**
  * Random “think” pauses so the app (and Session Replay) have time to record DOM updates and events.
- * Override bounds with `SIM_HUMAN_MIN_MS` / `SIM_HUMAN_MAX_MS` (e.g. in CI).
+ * When `SIM_HUMAN_MIN_MS` / `SIM_HUMAN_MAX_MS` are set (CI), those bounds win over per-call args.
  */
 async function humanPause(page: Page, minMs?: number, maxMs?: number): Promise<void> {
-  const min = minMs ?? envMs('SIM_HUMAN_MIN_MS', 600)
-  const max = maxMs ?? envMs('SIM_HUMAN_MAX_MS', 1_450)
+  const min =
+    process.env.SIM_HUMAN_MIN_MS !== undefined
+      ? envMs('SIM_HUMAN_MIN_MS', 600)
+      : (minMs ?? 600)
+  const max =
+    process.env.SIM_HUMAN_MAX_MS !== undefined
+      ? envMs('SIM_HUMAN_MAX_MS', 1_450)
+      : (maxMs ?? 1_450)
   const hi = Math.max(min, max)
   const lo = Math.min(min, max)
   await page.waitForTimeout(randInt(lo, hi))
@@ -534,6 +540,8 @@ function registerExperimentTrafficSuite(): void {
   const count = experimentUserCount()
 
   test.describe.parallel(`hero_copy_test traffic (${count} users)`, () => {
+    test.describe.configure({ timeout: 120_000 })
+
     for (let index = 1; index <= count; index += 1) {
       const userLabel = `exp-user-${index}`
       const cohort: SimulatedCohort = index % 4 === 0 ? 'returning' : 'new'

@@ -10,6 +10,12 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 2 : 6,
+  // Customer sims use slowMo + human pauses; long journeys (fitting call → checkout)
+  // routinely exceed Playwright’s 30s default under CI.
+  timeout: process.env.CI || slowMo > 0 ? 120_000 : 60_000,
+  expect: {
+    timeout: 15_000,
+  },
   reporter: [['list']],
   use: {
     baseURL,
