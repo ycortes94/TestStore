@@ -33,3 +33,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Capacitor / native local junk
+.capacitor
+.tmp-mobile
+*.mobileprovision
+ios/App/Pods
+ios/App/App/public
+ios/DerivedData
+android/.gradle
+android/app/build
+android/build
+android/app/src/main/assets/public
+android/local.properties
+android/.idea
+android/captures
+android/*.iml
+android/app/*.iml

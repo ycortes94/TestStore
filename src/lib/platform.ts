@@ -1,7 +1,9 @@
 /**
  * Lightweight client platform detection for Statsig targeting + event metadata.
- * Uses UA Client Hints when available, then falls back to userAgent.
+ * Prefers Capacitor native platform when available, then UA Client Hints, then userAgent.
  */
+
+import { Capacitor } from '@capacitor/core'
 
 export type OsFamily = 'ios' | 'android' | 'desktop' | 'other'
 
@@ -37,6 +39,31 @@ export const getPlatformInfo = (): PlatformInfo => {
   }
 
   const ua = navigator.userAgent || ''
+
+  // Native Capacitor shells report an authoritative OS; prefer that over UA sniffing.
+  if (Capacitor.isNativePlatform()) {
+    const capPlatform = Capacitor.getPlatform()
+    if (capPlatform === 'ios') {
+      const isTablet =
+        /ipad/i.test(ua) || (navigator.maxTouchPoints > 1 && !/iphone|ipod/i.test(ua))
+      return {
+        osFamily: 'ios',
+        deviceType: isTablet ? 'tablet' : 'mobile',
+        platform: isTablet ? 'ipad' : 'iphone',
+        userAgent: ua,
+      }
+    }
+    if (capPlatform === 'android') {
+      const isTablet = /android/i.test(ua) && !/mobile/i.test(ua)
+      return {
+        osFamily: 'android',
+        deviceType: isTablet ? 'tablet' : 'mobile',
+        platform: 'android',
+        userAgent: ua,
+      }
+    }
+  }
+
   const uaData = readUaData()
   const platformHint = (uaData?.platform ?? navigator.platform ?? '').toLowerCase()
   const uaLower = ua.toLowerCase()

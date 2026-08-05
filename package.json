@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:mobile": "vite --host",
     "build": "tsc -b && vite build",
+    "build:mobile": "npm run build && npx cap sync",
+    "cap:ios": "npx cap open ios",
+    "cap:android": "npx cap open android",
     "lint": "eslint .",
     "preview": "vite preview",
     "simulate-customers": "bash scripts/run-customer-simulation.sh",
@@ -16,6 +20,10 @@
   },
   "dependencies": {
     "@amplitude/unified": "^1.0.15",
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
     "@statsig/js-client": "^3.33.3",
     "@statsig/react-bindings": "^3.33.3",
     "react": "^19.2.0",

@@ -10,6 +10,7 @@ import {
   PDP_RECS_EXPERIMENT,
 } from '../lib/shipping'
 import { triggerNewsletterModal } from '../lib/newsletter'
+import { getStatsigStableID } from '../lib/statsig'
 import { PLATFORM_PROMO_CONFIG } from './PlatformPromoBanner'
 
 /** DEV-only support panel for verifying Statsig evaluations without DevTools. */
@@ -37,7 +38,7 @@ const StatsigLab = () => {
       const platform = getPlatformEventFields()
 
       return {
-        stableID: context?.stableID ?? 'unknown',
+        stableID: getStatsigStableID() ?? context?.stableID ?? 'unknown',
         tier: context?.options?.environment?.tier ?? 'production (default)',
         platform,
         gates: [

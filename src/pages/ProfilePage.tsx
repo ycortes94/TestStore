@@ -4,7 +4,7 @@ import { useStatsigClient } from '@statsig/react-bindings'
 import { trackEvent } from '../lib/analytics'
 import { getPlatformEventFields, getPlatformInfo } from '../lib/platform'
 import type { StoredOrder } from '../lib/orders'
-import { logStatsigEvent } from '../lib/statsig'
+import { getStatsigStableID, logStatsigEvent } from '../lib/statsig'
 import { useStore } from '../store/StoreContext'
 
 const formatDate = (iso: string): string => {
@@ -35,17 +35,7 @@ const ProfilePage = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null)
   const hasLoggedProfileView = useRef(false)
 
-  const stableID = useMemo(() => {
-    if (!client) {
-      return null
-    }
-    const context = (
-      client as typeof client & {
-        getContext?: () => { stableID?: string }
-      }
-    ).getContext?.()
-    return context?.stableID ?? null
-  }, [client])
+  const stableID = useMemo(() => getStatsigStableID(), [client])
 
   const platform = useMemo(() => getPlatformInfo(), [])
   const displayName = stableID ? `Shopper ${stableID.slice(0, 8)}…` : 'Guest shopper'

@@ -144,6 +144,30 @@ export const initStatsig = async (): Promise<StatsigClient | null> => {
 
 export const getStatsigClient = (): StatsigClient | null => client
 
+/**
+ * Persisted anonymous unit ID used for stableID-targeted gates/experiments.
+ * Prefer the live client context; fall back to StableID storage when needed.
+ */
+export const getStatsigStableID = (): string | null => {
+  if (client) {
+    const fromContext = client.getContext()?.stableID
+    if (typeof fromContext === 'string' && fromContext.trim() !== '') {
+      return fromContext
+    }
+    const fromCustomIDs = client.getContext()?.user?.customIDs?.stableID
+    if (typeof fromCustomIDs === 'string' && fromCustomIDs.trim() !== '') {
+      return fromCustomIDs
+    }
+  }
+
+  if (!STATSIG_CLIENT_KEY) {
+    return null
+  }
+
+  const fromStorage = StableID.get(STATSIG_CLIENT_KEY)
+  return typeof fromStorage === 'string' && fromStorage.trim() !== '' ? fromStorage : null
+}
+
 export const logStatsigEvent = (
   eventName: string,
   value?: string | number,
@@ -154,8 +178,14 @@ export const logStatsigEvent = (
   }
 
   // Always attach platform fields so Pulse / exports can slice iPhone vs Android.
+  // Also mirror stableID into event metadata — Metrics “event properties” often hide
+  // user.customIDs, which makes hero CTA clicks look like they have no unit ID.
   const platformFields = getPlatformEventFields()
-  const metadata: Record<string, string> = { ...platformFields }
+  const stableID = getStatsigStableID()
+  const metadata: Record<string, string> = {
+    ...platformFields,
+    ...(stableID ? { stableID } : {}),
+  }
   for (const [key, raw] of Object.entries(properties ?? {})) {
     if (raw === undefined || raw === null) {
       continue

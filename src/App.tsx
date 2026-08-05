@@ -142,24 +142,29 @@ const StoreShell = () => {
   }
 
   const scrollToCatalog = () => {
-    trackEvent('hero_primary_clicked', { target: 'catalog' })
-    logStatsigEvent('cta_clicked', undefined, {
+    const heroProps = {
       cta: 'explore-the-edit',
       ctaLabel: 'Explore the edit',
       ctaType: 'hero_primary',
       target: 'catalog',
-    })
+    }
+    trackEvent('hero_primary_clicked', { target: 'catalog' })
+    // Keep both names: Metrics may still key off the original hero_cta_clicked event.
+    logStatsigEvent('hero_cta_clicked', undefined, heroProps)
+    logStatsigEvent('cta_clicked', undefined, heroProps)
     catalogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   const handleBookFittingCall = () => {
-    trackEvent('hero_secondary_clicked', { target: 'fitting-call' })
-    logStatsigEvent('cta_clicked', undefined, {
+    const heroProps = {
       cta: 'book-a-fitting-call',
       ctaLabel: 'Book a fitting call',
       ctaType: 'hero_secondary',
       target: 'fitting_call_modal',
-    })
+    }
+    trackEvent('hero_secondary_clicked', { target: 'fitting-call' })
+    logStatsigEvent('hero_cta_clicked', undefined, heroProps)
+    logStatsigEvent('cta_clicked', undefined, heroProps)
     trackEvent('fitting_call_modal_opened', { source: 'hero_secondary' })
     logStatsigEvent('fitting_call_modal_opened', undefined, { source: 'hero_secondary' })
     openFittingCall()

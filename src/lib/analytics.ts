@@ -23,6 +23,7 @@ import {
   track,
 } from '@amplitude/unified'
 import { getPlatformEventFields } from './platform'
+import { getStatsigStableID } from './statsig'
 
 /** Unified’s public `SessionReplayOptions` comes from standalone SR types and omits plugin-only flags; runtime accepts them (see Session Replay plugin docs). */
 type UnifiedSessionReplayConfig = NonNullable<NonNullable<Parameters<typeof initAll>[1]>['sessionReplay']>
@@ -216,7 +217,13 @@ export const trackEvent = (eventType: string, eventProperties?: EventProperties)
 
   const e2e = getE2eSimulationProps()
   const platform = getPlatformEventFields()
-  void track(eventType, { ...platform, ...eventProperties, ...e2e })
+  const statsigStableID = getStatsigStableID()
+  void track(eventType, {
+    ...platform,
+    ...(statsigStableID ? { statsigStableID } : {}),
+    ...eventProperties,
+    ...e2e,
+  })
 }
 
 export const isAnalyticsEnabled = (): boolean => hasInitialized
