@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Installs a LaunchAgent that runs scripts/run-daily-simulation.sh every day at
-# 8:00 AM, 9:30 AM, and 2:00 PM in the Mac's system time zone
+# 8:00 AM, 9:30 AM, 2:00 PM, 5:00 PM, and 8:00 PM in the Mac's system time zone
 # (set System Settings → Date & Time → Los Angeles for Pacific).
 # Run once from the repo: bash scripts/install-macos-launchagent.sh
 # Uninstall: bash scripts/uninstall-macos-launchagent.sh
@@ -50,6 +50,18 @@ cat >"$PLIST" <<EOF
       <key>Minute</key>
       <integer>0</integer>
     </dict>
+    <dict>
+      <key>Hour</key>
+      <integer>17</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key>
+      <integer>20</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
   </array>
   <key>StandardOutPath</key>
   <string>${REPO_ROOT}/logs/launchd-stdout.log</string>
@@ -64,7 +76,7 @@ launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || launchctl unload "$PLIS
 launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null || launchctl load -w "$PLIST"
 
 echo "Installed LaunchAgent: $PLIST"
-echo "Schedule: every day at 08:00, 09:30, and 14:00 local time. For Pacific Time, set the Mac timezone to Los Angeles."
+echo "Schedule: every day at 08:00, 09:30, 14:00, 17:00, and 20:00 local time. For Pacific Time, set the Mac timezone to Los Angeles."
 echo "Verify: launchctl print \"gui/$(id -u)/${LABEL}\""
 echo "Logs: $REPO_ROOT/logs/daily-simulation.log"
 echo "Test run now: bash scripts/run-daily-simulation.sh"
