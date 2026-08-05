@@ -1,6 +1,8 @@
-# Runs the Playwright “customer simulation” every morning in Pacific time
+# Runs the Playwright “customer simulation” several times daily in Pacific time
 # (America/Los_Angeles — handles PST/PDT). See:
 # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onschedule
+#
+# Schedule (Pacific): 8:00, 9:30, 14:00, 17:00 (5 PM), 20:00 (8 PM).
 #
 # Scheduling notes:
 # - Runs only from the repository DEFAULT branch (merge this file to main/master).
@@ -16,6 +18,10 @@ on:
     - cron: '30 9 * * *'
       timezone: America/Los_Angeles
     - cron: '0 14 * * *'
+      timezone: America/Los_Angeles
+    - cron: '0 17 * * *'
+      timezone: America/Los_Angeles
+    - cron: '0 20 * * *'
       timezone: America/Los_Angeles
   workflow_dispatch:
 
