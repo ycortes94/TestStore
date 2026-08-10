@@ -84,6 +84,7 @@ export const initStatsig = async (): Promise<StatsigClient | null> => {
   client = instance
 
   if (import.meta.env.DEV) {
+    const homepage = instance.getExperiment('homepage_revamp_test')
     const experiment = instance.getExperiment('hero_copy_test')
     const recs = instance.getExperiment('pdp_recs_test')
     const shipping = instance.getExperiment('checkout_shipping_test')
@@ -94,6 +95,11 @@ export const initStatsig = async (): Promise<StatsigClient | null> => {
     console.info('[Statsig] environment tier:', context.options?.environment?.tier ?? 'production (default)')
     console.info('[Statsig] Use this stableID for experiment overrides:', context.stableID)
     console.info('[Statsig] platform (user.custom + events):', platformFields)
+    console.info('[Statsig] homepage_revamp_test evaluation:', {
+      groupName: homepage.groupName,
+      reason: homepage.details.reason,
+      homepage_variant: homepage.get('homepage_variant', null),
+    })
     console.info('[Statsig] hero_copy_test evaluation:', {
       groupName: experiment.groupName,
       reason: experiment.details.reason,

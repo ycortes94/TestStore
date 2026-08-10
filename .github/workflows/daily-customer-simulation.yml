@@ -33,7 +33,7 @@ concurrency:
 jobs:
   simulate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +52,7 @@ jobs:
         run: npm run simulate-customers
         env:
           CI: true
-          SIM_EXPERIMENT_USERS: '8'
+          SIM_EXPERIMENT_USERS: '100'
           VITE_STATSIG_TIER: production
           # Keep pacing human-like but leave headroom under the 120s test timeout.
           PLAYWRIGHT_SLOW_MO: '80'

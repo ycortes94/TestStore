@@ -56,19 +56,46 @@ async function humanType(page: Page, locator: Locator, text: string): Promise<vo
   await locator.pressSequentially(text, { delay: randInt(55, 125) })
 }
 
+type HomepageVariant = 'control' | 'runway' | 'studio'
+
+async function detectHomepageVariant(page: Page): Promise<HomepageVariant> {
+  // Wait for a homepage root, otherwise a check that races React render reads as Control.
+  await expect(page.locator('.control-home, .runway-home, .studio-home').first()).toBeVisible()
+
+  if (await page.locator('.runway-home').first().isVisible().catch(() => false)) {
+    return 'runway'
+  }
+  if (await page.locator('.studio-home').first().isVisible().catch(() => false)) {
+    return 'studio'
+  }
+  return 'control'
+}
+
 async function openCatalog(page: Page): Promise<void> {
   await page.goto('/')
   await openHeroCatalog(page)
 }
 
-/** Primary hero CTA — Control ("Explore the edit") or Test ("Shop new arrivals"). */
+/**
+ * Shop / browse CTA across homepage_revamp_test arms:
+ * Control — Explore the edit | Shop new arrivals (legacy hero_copy_test copy)
+ * Runway — Shop the runway
+ * Studio — Or explore the edit
+ */
+function shopCta(page: Page): Locator {
+  return page.getByRole('button', {
+    name: /Explore the edit|Shop new arrivals|Shop the runway|Or explore the edit/i,
+  })
+}
+
+/** @deprecated Prefer shopCta — kept for readability at call sites that mean "primary shop". */
 function heroPrimaryCta(page: Page): Locator {
-  return page.getByRole('button', { name: /Explore the edit|Shop new arrivals/i })
+  return shopCta(page)
 }
 
 /** Use when the page is already on a shopping tab (do not call `page.goto` first). */
 async function openHeroCatalog(page: Page): Promise<void> {
-  await heroPrimaryCta(page).click()
+  await shopCta(page).click()
   await humanMicroPause(page, 280, 680)
   await expect(page.getByRole('searchbox')).toBeVisible()
 }
@@ -78,12 +105,20 @@ async function goToTab(page: Page, tabName: string): Promise<void> {
   await humanPause(page, 400, 920)
 }
 
-/** Completes the Book a fitting call modal end-to-end (Statsig `fitting_call_scheduled`). */
+/**
+ * Completes the Book a fitting call modal (Statsig `fitting_call_scheduled`).
+ * Returns false on Runway (no fitting CTA) so callers can continue the shop journey.
+ */
 async function bookFittingCall(
   page: Page,
   persona: { name: string; email: string; notes?: string },
-): Promise<void> {
-  await page.getByRole('button', { name: 'Book a fitting call' }).click()
+): Promise<boolean> {
+  const bookBtn = page.getByRole('button', { name: 'Book a fitting call' })
+  if (!(await bookBtn.isVisible().catch(() => false))) {
+    return false
+  }
+
+  await bookBtn.click()
   const dialog = page.getByRole('dialog', { name: /Book a fitting call/i })
   await expect(dialog).toBeVisible()
   await humanPause(page, 400, 900)
@@ -115,6 +150,63 @@ async function bookFittingCall(
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await humanMicroPause(page, 300, 720)
   await flushStatsig(page)
+  return true
+}
+
+/**
+ * Cart controls live in the sidebar on Control/Studio; Runway hides it, so fall back to the
+ * header bag modal (same Add one / Remove one / Clear affordances).
+ */
+async function withCartControls<T>(page: Page, fn: (scope: Locator) => Promise<T>): Promise<T> {
+  const sidebar = page.locator('.cart-summary').first()
+  if (await sidebar.isVisible().catch(() => false)) {
+    return fn(sidebar)
+  }
+
+  await page.getByRole('button', { name: /Open bag/i }).click()
+  const bag = page.getByRole('dialog', { name: /Cart details/i })
+  await expect(bag).toBeVisible()
+  const result = await fn(bag)
+  await page.keyboard.press('Escape')
+  await expect(bag).toHaveCount(0)
+  await humanMicroPause(page, 200, 450)
+  return result
+}
+
+/** True when the bag has at least one item, regardless of homepage variant. */
+async function cartHasItems(page: Page): Promise<boolean> {
+  const chip = page.getByRole('button', { name: /Open bag/i })
+  const label = (await chip.getAttribute('aria-label').catch(() => null)) ?? ''
+  const match = /Open bag,\s*(\d+)/i.exec(label)
+  return match ? Number(match[1]) > 0 : false
+}
+
+/** Checkout affordance across variants: sidebar button or Runway sticky bag bar. */
+function checkoutAffordance(page: Page): Locator {
+  return page
+    .getByRole('button', { name: 'Continue to checkout' })
+    .or(page.locator('.runway-bag-bar').getByRole('button', { name: 'Checkout' }))
+    .first()
+}
+
+/** Opens checkout from the cart sidebar, Runway bag bar, or header bag modal. */
+async function beginCheckout(page: Page): Promise<void> {
+  const continueToCheckout = page.getByRole('button', { name: 'Continue to checkout' })
+  if (await continueToCheckout.isVisible().catch(() => false)) {
+    await continueToCheckout.click()
+    return
+  }
+
+  const runwayCheckout = page.locator('.runway-bag-bar').getByRole('button', { name: 'Checkout' })
+  if (await runwayCheckout.isVisible().catch(() => false)) {
+    await runwayCheckout.click()
+    return
+  }
+
+  await page.getByRole('button', { name: /Open bag/i }).click()
+  const bag = page.getByRole('dialog', { name: /Cart details/i })
+  await expect(bag).toBeVisible()
+  await bag.getByRole('button', { name: /Continue to checkout/i }).click()
 }
 
 /** Fills bag, runs checkout through Place order, closes thank-you modal. */
@@ -124,7 +216,7 @@ async function completePurchase(
 ): Promise<void> {
   const shipping = options?.shipping ?? (Math.random() < 0.45 ? 'express' : 'standard')
   await humanPause(page, 430, 1_000)
-  await page.getByRole('button', { name: 'Continue to checkout' }).click()
+  await beginCheckout(page)
   const review = page.getByRole('dialog', { name: /Review your order/i })
   await expect(review).toBeVisible()
   await humanPause(page, 500, 1_100)
@@ -146,7 +238,6 @@ async function completePurchase(
   await page.getByRole('button', { name: 'Back to shopping' }).click()
   await expect(page.getByRole('dialog', { name: /Thanks|Review your order|Cart details/i })).toHaveCount(0)
   await humanMicroPause(page, 300, 720)
-  await expect(page.getByText('Add a few products to see them here.')).toBeVisible()
   await flushStatsig(page)
 }
 
@@ -243,9 +334,11 @@ async function fillCartForPromoThresholds(
     await humanMicroPause(page)
   }
 
-  await expect(page.locator('.free-shipping-banner')).toBeVisible()
+  await expect(page.locator('.free-shipping-banner').or(page.locator('.runway-bag-bar'))).toBeVisible()
   if (mode === 'coupon') {
-    await expect(page.locator('.cart-summary__coupon.is-unlocked, .cart-summary__coupon')).toBeVisible()
+    await withCartControls(page, async (scope) => {
+      await expect(scope.locator('.cart-summary__coupon, .free-shipping-banner').first()).toBeVisible()
+    })
   }
 }
 
@@ -280,9 +373,15 @@ function registerShoppersSuite(cohort: SimulatedCohort, userLabel: string): void
       await humanPause(page, 470, 1080)
       await addButtons.first().click()
       await humanMicroPause(page)
-      await page.getByRole('button', { name: /Add one City Trail Sneaker/i }).click()
+      await withCartControls(page, async (scope) => {
+        const increment = scope.getByRole('button', { name: /Add one /i }).first()
+        if (await increment.isVisible().catch(() => false)) {
+          await increment.click()
+          await humanMicroPause(page)
+        }
+      })
 
-      await expect(page.getByRole('button', { name: 'Continue to checkout' })).toBeEnabled()
+      await expect(checkoutAffordance(page)).toBeEnabled()
       await completePurchase(page)
 
       await humanPause(page)
@@ -297,7 +396,7 @@ function registerShoppersSuite(cohort: SimulatedCohort, userLabel: string): void
       await page.locator('section.filters input[type="range"]').fill('150')
       await humanMicroPause(page)
       await page.getByRole('button', { name: 'Add to bag' }).first().click()
-      await expect(page.getByRole('button', { name: 'Clear' })).toBeEnabled()
+      await expect(checkoutAffordance(page)).toBeEnabled()
       await humanPause(page, 400, 950)
       await completePurchase(page)
 
@@ -310,14 +409,14 @@ function registerShoppersSuite(cohort: SimulatedCohort, userLabel: string): void
     test('window shopper books a fitting call then buys a drinkware bundle', async ({ page }) => {
       await page.goto('/')
       await humanPause(page)
-      await page.getByRole('heading', { name: /Layer smart/i }).scrollIntoViewIfNeeded()
+      await page.getByRole('heading', { level: 1 }).scrollIntoViewIfNeeded()
       await humanMicroPause(page)
       await bookFittingCall(page, {
         name: `${userLabel} Shopper`,
         email: `${userLabel.replace(/\W+/g, '-')}@example.com`,
         notes: 'Looking for breathable layers for morning runs.',
       })
-      await openCatalog(page)
+      await openHeroCatalog(page)
 
       await humanType(page, page.getByRole('searchbox'), 'hydration')
       await humanPause(page)
@@ -371,9 +470,9 @@ function registerShoppersSuite(cohort: SimulatedCohort, userLabel: string): void
       await humanPause(page)
       await page.getByRole('button', { name: 'Add to bag' }).first().click()
       await expect(page.getByRole('dialog')).toHaveCount(0)
-      await expect(page.getByRole('button', { name: 'Continue to checkout' })).toBeEnabled()
+      await expect(checkoutAffordance(page)).toBeEnabled()
       await humanPause(page, 540, 1180)
-      await page.getByRole('button', { name: 'Continue to checkout' }).click()
+      await beginCheckout(page)
       const review = page.getByRole('dialog', { name: /Review your order/i })
       await expect(review).toBeVisible()
       await humanPause(page, 470, 1080)
@@ -395,13 +494,13 @@ function registerShoppersSuite(cohort: SimulatedCohort, userLabel: string): void
       await humanPause(page, 380, 880)
       await page.getByRole('button', { name: 'Add to bag' }).first().click()
       await humanPause(page, 430, 960)
-      await page.getByRole('button', { name: 'Continue to checkout' }).click()
+      await beginCheckout(page)
       await expect(page.getByRole('dialog', { name: /Review your order/i })).toBeVisible()
       await humanPause(page, 540, 1180)
       await page.getByRole('button', { name: 'Keep shopping' }).click()
       await expect(page.getByRole('dialog')).toHaveCount(0)
       await humanPause(page, 470, 1080)
-      await page.getByRole('button', { name: 'Continue to checkout' }).click()
+      await beginCheckout(page)
       await humanPause(page, 600, 1320)
       await page.getByRole('button', { name: 'Place order' }).click()
       await humanMicroPause(page)
@@ -524,70 +623,96 @@ registerTabJourneysSuite('new', 'user-1')
 registerTabJourneysSuite('returning', 'user-2')
 
 /**
- * Extra unique visitors for `hero_copy_test`: each gets a fresh Statsig stableID, hits the hero,
- * books a fitting call, and completes a purchase. Override count with `SIM_EXPERIMENT_USERS`.
- * Variants also exercise PDP recs, express shipping, and promo thresholds.
+ * Extra unique visitors for `homepage_revamp_test`: each gets a Statsig stableID (fresh for
+ * new users; deterministic reused IDs for returning), hits the assigned homepage, and completes
+ * a purchase. Override count with `SIM_EXPERIMENT_USERS` (default 100).
+ * Variants also exercise PDP recs, express shipping, and promo thresholds when on Control/Studio.
  */
 function experimentUserCount(): number {
-  const n = Number(process.env.SIM_EXPERIMENT_USERS ?? 8)
+  const n = Number(process.env.SIM_EXPERIMENT_USERS ?? 100)
   if (!Number.isFinite(n) || n < 1) {
-    return 8
+    return 100
   }
-  return Math.min(Math.floor(n), 24)
+  return Math.min(Math.floor(n), 200)
 }
 
 function registerExperimentTrafficSuite(): void {
   const count = experimentUserCount()
 
-  test.describe.parallel(`hero_copy_test traffic (${count} users)`, () => {
+  test.describe.parallel(`homepage_revamp_test traffic (${count} users)`, () => {
     test.describe.configure({ timeout: 120_000 })
 
     for (let index = 1; index <= count; index += 1) {
       const userLabel = `exp-user-${index}`
+      // ~25% returning with a stable Statsig unit reused across daily runs.
       const cohort: SimulatedCohort = index % 4 === 0 ? 'returning' : 'new'
-      const variant = index % 3
+      const journey = index % 3
 
-      test(`${userLabel} (${cohort}): hero → fitting call → purchase`, async ({ page }) => {
+      test(`${userLabel} (${cohort}): homepage → purchase`, async ({ page }) => {
         await primeUserSession(page, { cohort, userLabel })
         await page.goto('/')
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
         await humanPause(page, 500, 1_200)
 
-        // platform_promo_banner dynamic config (visible on shopping tabs).
-        await expect(page.locator('.platform-promo-banner')).toBeVisible()
+        const homepage = await detectHomepageVariant(page)
 
-        // Ensure experiment exposure + primary CTA interaction before booking.
-        if (variant === 0) {
+        if (homepage === 'control') {
+          await expect(page.locator('.platform-promo-banner')).toBeVisible()
+        }
+
+        // Variant-native first action so each arm gets realistic exposure + engagement.
+        if (homepage === 'studio') {
+          await bookFittingCall(page, {
+            name: `Experiment Shopper ${index}`,
+            email: `exp.user.${index}@example.com`,
+            notes:
+              journey === 1
+                ? 'Need sizing help for trail shoes and a mid-layer.'
+                : 'Interested in a virtual fit check before ordering.',
+          })
+          await openHeroCatalog(page)
+        } else if (homepage === 'runway') {
+          await openHeroCatalog(page)
+          const featuredAdd = page.locator('.runway-featured__add').first()
+          if (await featuredAdd.isEnabled().catch(() => false)) {
+            await featuredAdd.click()
+            await humanMicroPause(page)
+          }
+        } else if (journey === 0) {
           await heroPrimaryCta(page).click()
           await humanMicroPause(page, 280, 680)
           await expect(page.getByRole('searchbox')).toBeVisible()
-          await page.getByRole('button', { name: 'Book a fitting call' }).scrollIntoViewIfNeeded()
-          await humanPause(page, 350, 800)
-        }
-
-        await bookFittingCall(page, {
-          name: `Experiment Shopper ${index}`,
-          email: `exp.user.${index}@example.com`,
-          notes:
-            variant === 1
-              ? 'Need sizing help for trail shoes and a mid-layer.'
-              : 'Interested in a virtual fit check before ordering.',
-        })
-
-        if (variant !== 0) {
+          const bookBtn = page.getByRole('button', { name: 'Book a fitting call' })
+          if (await bookBtn.isVisible().catch(() => false)) {
+            await bookBtn.scrollIntoViewIfNeeded()
+            await humanPause(page, 350, 800)
+            await bookFittingCall(page, {
+              name: `Experiment Shopper ${index}`,
+              email: `exp.user.${index}@example.com`,
+              notes: 'Interested in a virtual fit check before ordering.',
+            })
+          }
+        } else {
+          await bookFittingCall(page, {
+            name: `Experiment Shopper ${index}`,
+            email: `exp.user.${index}@example.com`,
+            notes:
+              journey === 1
+                ? 'Need sizing help for trail shoes and a mid-layer.'
+                : 'Interested in a virtual fit check before ordering.',
+          })
           await openHeroCatalog(page)
         }
 
-        if (variant === 2) {
+        if (journey === 2) {
           await page.getByRole('button', { name: 'Apparel', exact: true }).click()
           await humanMicroPause(page)
           await page.getByLabel('Sort').selectOption('rating')
           await humanPause(page, 350, 820)
-          // Low-stock urgency gate + PDP recs experiment.
           await browseProductDetail(page, 'Studio Wrap Jacket', { addToBag: true, clickRec: true })
           await page.goto('/')
           await openHeroCatalog(page)
-        } else if (variant === 1) {
+        } else if (journey === 1 && homepage !== 'runway') {
           await page.getByRole('button', { name: 'Footwear', exact: true }).click()
           await humanMicroPause(page)
           await browseProductDetail(page, 'City Trail Sneaker', { addToBag: true })
@@ -598,7 +723,7 @@ function registerExperimentTrafficSuite(): void {
 
         await page.getByRole('button', { name: 'Add to bag' }).first().click()
         await humanPause(page, 400, 950)
-        if (variant !== 1) {
+        if (journey !== 1) {
           const secondAdd = page.getByRole('button', { name: 'Add to bag' }).nth(1)
           if (await secondAdd.isVisible().catch(() => false)) {
             await secondAdd.click()
@@ -606,8 +731,7 @@ function registerExperimentTrafficSuite(): void {
           }
         }
 
-        await expect(page.getByRole('button', { name: 'Continue to checkout' })).toBeEnabled()
-        await completePurchase(page, { shipping: variant === 0 ? 'express' : 'standard' })
+        await completePurchase(page, { shipping: journey === 0 ? 'express' : 'standard' })
       })
     }
   })
@@ -628,9 +752,11 @@ function registerStatsigSurfacesSuite(): void {
       // Newsletter gate show_newsletter_modal (+ subscribe events)
       await completeNewsletterSignup(page, 'statsig.promo@example.com')
 
-      // Platform banner config + hero experiment exposure
+      // Platform banner config + homepage experiment exposure (banner is Control-only chrome)
       await page.goto('/')
-      await expect(page.locator('.platform-promo-banner')).toBeVisible()
+      if ((await detectHomepageVariant(page)) === 'control') {
+        await expect(page.locator('.platform-promo-banner')).toBeVisible()
+      }
       await openHeroCatalog(page)
 
       // Low-stock gate: Studio Wrap (stock 4) shows urgency when gate passes
@@ -650,7 +776,9 @@ function registerStatsigSurfacesSuite(): void {
 
       // free_shipping_rules + cart_promo_rules + show_cart_coupon_15
       await fillCartForPromoThresholds(page, 'coupon')
-      await expect(page.getByText(/off applied|Coupon unlocked|Almost there/i).first()).toBeVisible()
+      await withCartControls(page, async (scope) => {
+        await expect(scope.getByText(/off applied|Coupon unlocked|Almost there/i).first()).toBeVisible()
+      })
       await completePurchase(page, { shipping: 'express' })
 
       // Profile / order history (device-local)
@@ -677,11 +805,11 @@ function registerStatsigSurfacesSuite(): void {
       await page.goto('/')
       await openHeroCatalog(page)
       // Ensure free-shipping banner evaluates with items already in bag from PDP
-      if (await page.getByText('Add a few products to see them here.').isVisible().catch(() => false)) {
+      if (!(await cartHasItems(page))) {
         await page.getByRole('button', { name: 'Add to bag' }).first().click()
         await humanMicroPause(page)
       }
-      await expect(page.locator('.free-shipping-banner')).toBeVisible()
+      await expect(page.locator('.free-shipping-banner').or(page.locator('.runway-bag-bar'))).toBeVisible()
       await completePurchase(page, { shipping: 'express' })
     })
 

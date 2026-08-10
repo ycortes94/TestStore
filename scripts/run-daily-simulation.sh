@@ -16,8 +16,9 @@ if [ -s "$NVM_DIR/nvm.sh" ]; then
   . "$NVM_DIR/nvm.sh"
 fi
 
-# Extra unique visitors for hero_copy_test (fitting call + purchase). Override as needed.
-export SIM_EXPERIMENT_USERS="${SIM_EXPERIMENT_USERS:-8}"
+# Extra unique visitors for homepage_revamp_test (purchase + fitting where available).
+# ~25% are returning personas with a reused Statsig stableID across runs.
+export SIM_EXPERIMENT_USERS="${SIM_EXPERIMENT_USERS:-100}"
 export VITE_STATSIG_TIER="${VITE_STATSIG_TIER:-production}"
 # Force a dedicated Vite server on 5180 with production Statsig tier (see playwright.config.ts).
 export CI="${CI:-true}"

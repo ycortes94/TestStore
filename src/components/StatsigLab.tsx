@@ -1,6 +1,7 @@
 import { useStatsigClient } from '@statsig/react-bindings'
 import { useMemo, useState } from 'react'
 import { COUPON_GATE, CART_PROMO_CONFIG } from '../lib/coupon'
+import { HOMEPAGE_REVAMP_EXPERIMENT } from '../lib/homepageExperiment'
 import { getPlatformEventFields } from '../lib/platform'
 import {
   CHECKOUT_SHIPPING_EXPERIMENT,
@@ -30,6 +31,7 @@ const StatsigLab = () => {
       const lowStockGate = client.getFeatureGate(LOW_STOCK_GATE)
       const newsletterGate = client.getFeatureGate(NEWSLETTER_GATE)
       const hero = client.getExperiment('hero_copy_test')
+      const homepage = client.getExperiment(HOMEPAGE_REVAMP_EXPERIMENT)
       const recs = client.getExperiment(PDP_RECS_EXPERIMENT)
       const shipping = client.getExperiment(CHECKOUT_SHIPPING_EXPERIMENT)
       const promo = client.getDynamicConfig(CART_PROMO_CONFIG)
@@ -47,6 +49,14 @@ const StatsigLab = () => {
           { id: NEWSLETTER_GATE, value: newsletterGate.value, reason: newsletterGate.details.reason },
         ],
         experiments: [
+          {
+            id: HOMEPAGE_REVAMP_EXPERIMENT,
+            groupName: homepage.groupName,
+            reason: homepage.details.reason,
+            params: {
+              homepage_variant: homepage.get('homepage_variant', null),
+            },
+          },
           {
             id: 'hero_copy_test',
             groupName: hero.groupName,
@@ -139,7 +149,11 @@ const StatsigLab = () => {
               Close
             </button>
           </header>
-          <p className="microcopy">DEV only — for support-agent verification</p>
+          <p className="microcopy">
+            DEV only — for support-agent verification. Force a homepage with{' '}
+            <code>?homepage_variant=control|runway|studio</code>; it sticks for the tab session
+            until you visit <code>?homepage_variant=off</code>.
+          </p>
 
           <div className="statsig-lab__row">
             <span>stableID</span>

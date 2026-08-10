@@ -2,30 +2,23 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Route, Routes, useNavigate } from 'react-router-dom'
 import './App.css'
 import Header from './components/Header'
-import Hero from './components/Hero'
-import FilterPanel from './components/FilterPanel'
-import ProductGrid from './components/ProductGrid'
-import CartSummary from './components/CartSummary'
 import CartModal from './components/CartModal'
 import CheckoutModal from './components/CheckoutModal'
 import FittingCallModal, { type FittingCallRequest } from './components/FittingCallModal'
 import NewsletterModal from './components/NewsletterModal'
-import PlatformPromoBanner from './components/PlatformPromoBanner'
 import StatsigLab from './components/StatsigLab'
-import Perks from './components/Perks'
-import Testimonials from './components/Testimonials'
 import Footer from './components/Footer'
+import ControlHome from './homepages/ControlHome'
+import RunwayHome from './homepages/RunwayHome'
+import StudioHome from './homepages/StudioHome'
 import { maxPrice, minPrice, products as catalogProducts } from './data/products'
-import { NAV_TABS, isShoppingTab, type NavTabId } from './nav'
-import BestSellersPage, { type BestSellerSort } from './pages/BestSellersPage'
-import JournalPage from './pages/JournalPage'
-import NewArrivalsIntro from './pages/NewArrivalsIntro'
+import { NAV_TABS, type NavTabId } from './nav'
+import type { BestSellerSort } from './pages/BestSellersPage'
 import ProductDetailPage from './pages/ProductDetailPage'
 import ProfilePage from './pages/ProfilePage'
-import StudioKitsPage from './pages/StudioKitsPage'
-import SupportPage from './pages/SupportPage'
 import type { SortOption } from './types'
 import { trackEvent } from './lib/analytics'
+import { useHomepageVariant } from './lib/homepageExperiment'
 import { logStatsigEvent } from './lib/statsig'
 import { StoreProvider, useStore } from './store/StoreContext'
 
@@ -34,6 +27,7 @@ const productOrder = new Map(catalogProducts.map((product, index) => [product.id
 
 const StoreShell = () => {
   const navigate = useNavigate()
+  const homepageVariant = useHomepageVariant()
   const [activeTab, setActiveTab] = useState<NavTabId>('new-arrivals')
   const [newDropsOnly, setNewDropsOnly] = useState(false)
   const [bestSellerSort, setBestSellerSort] = useState<BestSellerSort>('featured')
@@ -73,12 +67,19 @@ const StoreShell = () => {
       return
     }
     hasLoggedHomeView.current = true
-    trackEvent('home_viewed', { totalProducts: catalogProducts.length })
-  }, [])
+    trackEvent('home_viewed', {
+      totalProducts: catalogProducts.length,
+      homepage_variant: homepageVariant,
+    })
+    logStatsigEvent('home_viewed', undefined, {
+      totalProducts: catalogProducts.length,
+      homepage_variant: homepageVariant,
+    })
+  }, [homepageVariant])
 
   useEffect(() => {
-    trackEvent('nav_tab_selected', { tab: activeTab })
-  }, [activeTab])
+    trackEvent('nav_tab_selected', { tab: activeTab, homepage_variant: homepageVariant })
+  }, [activeTab, homepageVariant])
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase()
@@ -136,6 +137,7 @@ const StoreShell = () => {
       cta: tab,
       ctaLabel: NAV_TABS.find((navTab) => navTab.id === tab)?.label ?? tab,
       ctaType: 'nav_tab',
+      homepage_variant: homepageVariant,
     })
     setActiveTab(tab)
     navigate('/')
@@ -147,9 +149,9 @@ const StoreShell = () => {
       ctaLabel: 'Explore the edit',
       ctaType: 'hero_primary',
       target: 'catalog',
+      homepage_variant: homepageVariant,
     }
-    trackEvent('hero_primary_clicked', { target: 'catalog' })
-    // Keep both names: Metrics may still key off the original hero_cta_clicked event.
+    trackEvent('hero_primary_clicked', { target: 'catalog', homepage_variant: homepageVariant })
     logStatsigEvent('hero_cta_clicked', undefined, heroProps)
     logStatsigEvent('cta_clicked', undefined, heroProps)
     catalogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -159,21 +161,34 @@ const StoreShell = () => {
     const heroProps = {
       cta: 'book-a-fitting-call',
       ctaLabel: 'Book a fitting call',
-      ctaType: 'hero_secondary',
+      ctaType: homepageVariant === 'studio' ? 'hero_primary' : 'hero_secondary',
       target: 'fitting_call_modal',
+      homepage_variant: homepageVariant,
     }
-    trackEvent('hero_secondary_clicked', { target: 'fitting-call' })
+    trackEvent('hero_secondary_clicked', { target: 'fitting-call', homepage_variant: homepageVariant })
     logStatsigEvent('hero_cta_clicked', undefined, heroProps)
     logStatsigEvent('cta_clicked', undefined, heroProps)
-    trackEvent('fitting_call_modal_opened', { source: 'hero_secondary' })
-    logStatsigEvent('fitting_call_modal_opened', undefined, { source: 'hero_secondary' })
+    trackEvent('fitting_call_modal_opened', {
+      source: homepageVariant === 'studio' ? 'hero_primary' : 'hero_secondary',
+      homepage_variant: homepageVariant,
+    })
+    logStatsigEvent('fitting_call_modal_opened', undefined, {
+      source: homepageVariant === 'studio' ? 'hero_primary' : 'hero_secondary',
+      homepage_variant: homepageVariant,
+    })
     openFittingCall()
   }
 
   const handleDismissFittingCall = (reason: 'cancel' | 'completed') => {
     if (reason === 'cancel') {
-      trackEvent('fitting_call_modal_dismissed', { source: 'fitting_call_modal' })
-      logStatsigEvent('fitting_call_modal_dismissed', undefined, { source: 'fitting_call_modal' })
+      trackEvent('fitting_call_modal_dismissed', {
+        source: 'fitting_call_modal',
+        homepage_variant: homepageVariant,
+      })
+      logStatsigEvent('fitting_call_modal_dismissed', undefined, {
+        source: 'fitting_call_modal',
+        homepage_variant: homepageVariant,
+      })
     }
     dismissFittingCall()
   }
@@ -185,6 +200,7 @@ const StoreShell = () => {
       hasNotes: request.notes.length > 0,
       notesLength: request.notes.length,
       source: 'fitting_call_modal',
+      homepage_variant: homepageVariant,
     })
     logStatsigEvent('fitting_call_scheduled', undefined, {
       preferredDate: request.preferredDate,
@@ -192,6 +208,7 @@ const StoreShell = () => {
       hasNotes: request.notes.length > 0,
       notesLength: request.notes.length,
       source: 'fitting_call_modal',
+      homepage_variant: homepageVariant,
     })
     logStatsigEvent('cta_clicked', undefined, {
       cta: 'schedule-fitting-call',
@@ -199,8 +216,66 @@ const StoreShell = () => {
       ctaType: 'fitting_call_modal',
       preferredDate: request.preferredDate,
       preferredTime: request.preferredTime,
+      homepage_variant: homepageVariant,
     })
   }
+
+  const homepageProps = {
+    homepageVariant,
+    activeTab,
+    catalogRef,
+    categories,
+    activeCategory,
+    onCategoryChange: (category: string) => {
+      setActiveCategory(category)
+      trackEvent('filter_category_selected', { category, homepage_variant: homepageVariant })
+    },
+    searchTerm,
+    onSearchChange: (value: string) => {
+      setSearchTerm(value)
+      trackEvent('filter_search_updated', {
+        queryLength: value.trim().length,
+        homepage_variant: homepageVariant,
+      })
+    },
+    priceCap,
+    minPrice,
+    maxPrice,
+    onPriceChange: (value: number) => {
+      setPriceCap(value)
+      trackEvent('filter_price_cap_changed', { priceCap: value, homepage_variant: homepageVariant })
+    },
+    onlyInStock,
+    onStockToggle: (value: boolean) => {
+      setOnlyInStock(value)
+      trackEvent('filter_stock_toggled', { onlyInStock: value, homepage_variant: homepageVariant })
+    },
+    sortOption,
+    onSortChange: (value: SortOption) => {
+      setSortOption(value)
+      trackEvent('sort_changed', { sortOption: value, homepage_variant: homepageVariant })
+    },
+    newDropsOnly,
+    onNewDropsOnlyChange: setNewDropsOnly,
+    newArrivalsProducts,
+    bestSellerProducts,
+    bestSellerSort,
+    onBestSellerSortChange: setBestSellerSort,
+    cartItems,
+    cartTotal,
+    onAddToCart: (product: (typeof catalogProducts)[number]) => addToCart(product),
+    onIncrement: increment,
+    onDecrement: decrement,
+    onClear: clearCart,
+    onBeginCheckout: beginCheckout,
+    onAddKit: addKit,
+    onShopCta: scrollToCatalog,
+    onBookFitting: handleBookFittingCall,
+    totalProducts: catalogProducts.length,
+  }
+
+  const Homepage =
+    homepageVariant === 'runway' ? RunwayHome : homepageVariant === 'studio' ? StudioHome : ControlHome
 
   return (
     <div className="app-shell">
@@ -210,11 +285,12 @@ const StoreShell = () => {
         onTabChange={handleTabChange}
         onOpenCart={openCart}
         onOpenProfile={() => {
-          trackEvent('profile_nav_clicked', { source: 'header' })
+          trackEvent('profile_nav_clicked', { source: 'header', homepage_variant: homepageVariant })
           logStatsigEvent('cta_clicked', undefined, {
             cta: 'account',
             ctaLabel: 'Account',
             ctaType: 'header',
+            homepage_variant: homepageVariant,
           })
           navigate('/profile')
         }}
@@ -222,120 +298,7 @@ const StoreShell = () => {
       />
 
       <Routes>
-        <Route
-          path="/"
-          element={
-            <>
-              {isShoppingTab(activeTab) && (
-                <Hero
-                  totalProducts={catalogProducts.length}
-                  onPrimaryAction={scrollToCatalog}
-                  onSecondaryAction={handleBookFittingCall}
-                />
-              )}
-
-              {isShoppingTab(activeTab) && <PlatformPromoBanner onCta={scrollToCatalog} />}
-
-              <main ref={catalogRef} id="main-tab-panel" role="tabpanel" aria-live="polite">
-                {activeTab === 'new-arrivals' && (
-                  <>
-                    <NewArrivalsIntro newDropsOnly={newDropsOnly} onNewDropsOnlyChange={setNewDropsOnly} />
-                    <FilterPanel
-                      categories={categories}
-                      activeCategory={activeCategory}
-                      onCategoryChange={(category) => {
-                        setActiveCategory(category)
-                        trackEvent('filter_category_selected', { category })
-                      }}
-                      searchTerm={searchTerm}
-                      onSearchChange={(value) => {
-                        setSearchTerm(value)
-                        trackEvent('filter_search_updated', { queryLength: value.trim().length })
-                      }}
-                      priceCap={priceCap}
-                      minPrice={minPrice}
-                      maxPrice={maxPrice}
-                      onPriceChange={(value) => {
-                        setPriceCap(value)
-                        trackEvent('filter_price_cap_changed', { priceCap: value })
-                      }}
-                      onlyInStock={onlyInStock}
-                      onStockToggle={(value) => {
-                        setOnlyInStock(value)
-                        trackEvent('filter_stock_toggled', { onlyInStock: value })
-                      }}
-                      sortOption={sortOption}
-                      onSortChange={(value) => {
-                        setSortOption(value)
-                        trackEvent('sort_changed', { sortOption: value })
-                      }}
-                    />
-                    <div className="content-columns">
-                      <div className="shop-column">
-                        <ProductGrid products={newArrivalsProducts} onAddToCart={(product) => addToCart(product)} />
-                      </div>
-                      <CartSummary
-                        items={cartItems}
-                        total={cartTotal}
-                        onIncrement={increment}
-                        onDecrement={decrement}
-                        onClear={clearCart}
-                        onBeginCheckout={beginCheckout}
-                      />
-                    </div>
-                  </>
-                )}
-
-                {activeTab === 'best-sellers' && (
-                  <div className="content-columns">
-                    <div className="shop-column">
-                      <BestSellersPage
-                        products={bestSellerProducts}
-                        sort={bestSellerSort}
-                        onSortChange={setBestSellerSort}
-                        onAddToCart={(product) => addToCart(product)}
-                      />
-                    </div>
-                    <CartSummary
-                      items={cartItems}
-                      total={cartTotal}
-                      onIncrement={increment}
-                      onDecrement={decrement}
-                      onClear={clearCart}
-                      onBeginCheckout={beginCheckout}
-                    />
-                  </div>
-                )}
-
-                {activeTab === 'studio-kits' && (
-                  <div className="content-columns">
-                    <div className="shop-column">
-                      <StudioKitsPage onAddKit={addKit} />
-                    </div>
-                    <CartSummary
-                      items={cartItems}
-                      total={cartTotal}
-                      onIncrement={increment}
-                      onDecrement={decrement}
-                      onClear={clearCart}
-                      onBeginCheckout={beginCheckout}
-                    />
-                  </div>
-                )}
-
-                {activeTab === 'journal' && <JournalPage />}
-                {activeTab === 'support' && <SupportPage />}
-              </main>
-
-              {isShoppingTab(activeTab) && (
-                <>
-                  <Perks />
-                  <Testimonials />
-                </>
-              )}
-            </>
-          }
-        />
+        <Route path="/" element={<Homepage {...homepageProps} />} />
         <Route
           path="/product/:productId"
           element={

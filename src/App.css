@@ -1536,3 +1536,412 @@ body::before {
   }
 }
 
+
+/* —— Homepage revamp: Runway —— */
+/* Wrapper exists to identify the Control arm; it re-creates the .app-shell stacking rhythm
+   the sections had when they were direct flex children. */
+.control-home {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+.runway-home {
+  --runway-ink: #0c1210;
+  --runway-fog: #e8ebe4;
+  --runway-accent: #c4f042;
+  margin: 0 calc(-1 * clamp(1rem, 3vw, 2rem));
+}
+
+.runway-hero {
+  position: relative;
+  min-height: min(88vh, 720px);
+  display: flex;
+  align-items: flex-end;
+  padding: clamp(2rem, 6vw, 4.5rem);
+  color: #f4f6f1;
+  overflow: hidden;
+}
+
+.runway-hero__atmosphere {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(105deg, rgba(8, 14, 12, 0.88) 18%, rgba(8, 14, 12, 0.35) 55%, rgba(8, 14, 12, 0.55) 100%),
+    url('https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1800&q=80')
+      center / cover no-repeat;
+  transform: scale(1.02);
+}
+
+.runway-hero__inner {
+  position: relative;
+  z-index: 1;
+  max-width: 34rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.runway-hero__brand {
+  font-family: 'Bebas Neue', Impact, sans-serif;
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
+  letter-spacing: 0.04em;
+  margin: 0;
+  line-height: 0.9;
+  color: var(--runway-accent);
+}
+
+.runway-hero h1 {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  line-height: 1.15;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.runway-hero__sub {
+  margin: 0;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1.05rem;
+  max-width: 28rem;
+  color: rgba(244, 246, 241, 0.82);
+}
+
+.runway-hero__cta {
+  align-self: flex-start;
+  margin-top: 0.5rem;
+  border: none;
+  background: var(--runway-accent);
+  color: var(--runway-ink);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.9rem 1.5rem;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+}
+
+.runway-hero__cta:hover {
+  filter: brightness(1.05);
+}
+
+.runway-featured {
+  background: var(--runway-fog);
+  color: var(--runway-ink);
+  padding: clamp(1.5rem, 4vw, 2.5rem) clamp(1rem, 3vw, 2rem);
+}
+
+.runway-featured__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.runway-featured__header h2 {
+  font-family: 'Bebas Neue', Impact, sans-serif;
+  font-size: 2rem;
+  letter-spacing: 0.03em;
+  margin: 0;
+}
+
+.runway-featured__header p {
+  margin: 0;
+  font-family: 'DM Sans', sans-serif;
+  color: #3d4a42;
+}
+
+.runway-featured__strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.runway-featured__strip li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.runway-featured__card {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.runway-featured__card img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: #d5dacf;
+}
+
+.runway-featured__card strong {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  display: block;
+}
+
+.runway-featured__card span {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  color: #3d4a42;
+}
+
+.runway-featured__add {
+  border: 1px solid var(--runway-ink);
+  background: transparent;
+  color: var(--runway-ink);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+}
+
+.runway-featured__add:hover:not(:disabled) {
+  background: var(--runway-ink);
+  color: var(--runway-fog);
+}
+
+.runway-featured__add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.runway-promo {
+  margin: 0;
+  padding: 0.85rem clamp(1rem, 3vw, 2rem);
+  text-align: center;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  background: var(--runway-ink);
+  color: var(--runway-fog);
+}
+
+.runway-home #main-tab-panel {
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.content-columns--solo {
+  grid-template-columns: 1fr;
+}
+
+.runway-bag-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem clamp(1rem, 3vw, 2rem);
+  background: var(--runway-ink);
+  color: var(--runway-fog);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.runway-bag-bar .primary {
+  background: var(--runway-accent);
+  color: var(--runway-ink);
+  border: none;
+}
+
+@media (max-width: 900px) {
+  .runway-featured__strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .runway-featured__strip {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* —— Homepage revamp: Studio —— */
+.studio-home {
+  --studio-ink: #15202b;
+  --studio-mist: #eef3f7;
+  --studio-slate: #5a6d7c;
+  --studio-teal: #1f6f78;
+  margin: 0 calc(-1 * clamp(1rem, 3vw, 2rem));
+  background: var(--studio-mist);
+}
+
+.studio-hero {
+  min-height: min(78vh, 640px);
+  display: flex;
+  align-items: center;
+  padding: clamp(2.5rem, 7vw, 5rem) clamp(1.25rem, 4vw, 3rem);
+  background:
+    radial-gradient(ellipse 65% 50% at 90% 15%, rgba(31, 111, 120, 0.16), transparent 55%),
+    linear-gradient(165deg, #dbe6ee 0%, #eef3f7 42%, #dde8e6 100%);
+  color: var(--studio-ink);
+}
+
+.studio-hero__inner {
+  max-width: 36rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.studio-hero__brand {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: clamp(1.75rem, 4vw, 2.35rem);
+  font-weight: 600;
+  margin: 0;
+  color: var(--studio-teal);
+  letter-spacing: -0.01em;
+}
+
+.studio-hero h1 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(2.2rem, 5.5vw, 3.6rem);
+  line-height: 1.08;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.studio-hero__sub {
+  margin: 0;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 1.1rem;
+  line-height: 1.55;
+  max-width: 30rem;
+  color: #3d4c58;
+}
+
+.studio-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.studio-hero__cta {
+  border: none;
+  background: var(--studio-ink);
+  color: #f5f9fb;
+  font-family: 'Source Sans 3', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.9rem 1.4rem;
+  cursor: pointer;
+}
+
+.studio-hero__cta:hover {
+  background: #243447;
+}
+
+.studio-hero__secondary {
+  border: 1px solid var(--studio-ink);
+  background: transparent;
+  color: var(--studio-ink);
+  font-family: 'Source Sans 3', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.9rem 1.4rem;
+  cursor: pointer;
+}
+
+.studio-hero__secondary:hover {
+  background: rgba(21, 32, 43, 0.06);
+}
+
+.studio-proof {
+  padding: clamp(2rem, 5vw, 3rem) clamp(1.25rem, 4vw, 3rem);
+  border-top: 1px solid rgba(21, 32, 43, 0.08);
+}
+
+.studio-proof__intro h2 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  margin: 0 0 0.4rem;
+}
+
+.studio-proof__intro p {
+  margin: 0 0 1.5rem;
+  font-family: 'Source Sans 3', sans-serif;
+  color: var(--studio-slate);
+}
+
+.studio-proof__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.studio-proof__grid li {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.studio-proof__grid img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.studio-proof__grid strong {
+  display: block;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.95rem;
+}
+
+.studio-proof__grid span {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.85rem;
+  color: var(--studio-teal);
+}
+
+.studio-kits-early {
+  padding: 0 clamp(1.25rem, 4vw, 3rem) clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.studio-kits-early .tab-page {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.studio-home .testimonials {
+  margin: 0 clamp(1.25rem, 4vw, 3rem);
+  padding-bottom: 1.5rem;
+}
+
+.studio-catalog-lead {
+  margin: 0;
+  padding: 1.25rem clamp(1.25rem, 4vw, 3rem);
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 1.15rem;
+  text-align: center;
+  color: var(--studio-slate);
+  border-top: 1px solid rgba(21, 32, 43, 0.08);
+}
+
+.studio-home #main-tab-panel {
+  padding: clamp(1rem, 3vw, 2rem);
+  background: #e8eef3;
+}
+
+@media (max-width: 720px) {
+  .studio-proof__grid {
+    grid-template-columns: 1fr;
+  }
+}
