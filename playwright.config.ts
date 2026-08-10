@@ -23,9 +23,15 @@ export default defineConfig({
     launchOptions: {
       slowMo: Number.isFinite(slowMo) && slowMo > 0 ? slowMo : undefined,
     },
-    ...devices['Desktop Chrome'],
   },
-  projects: [{ name: 'chromium', use: {} }],
+  // Chromium + device presets so Statsig sees desktop / android / iphone via UA.
+  // Force browserName: chromium — iPhone presets default to WebKit, which GHA does not install.
+  // Filter locally with --project=desktop|android|ios.
+  projects: [
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], browserName: 'chromium' } },
+    { name: 'android', use: { ...devices['Pixel 7'], browserName: 'chromium' } },
+    { name: 'ios', use: { ...devices['iPhone 14'], browserName: 'chromium' } },
+  ],
   webServer: {
     command: `npm run dev -- --host 127.0.0.1 --port ${simPort} --strictPort`,
     url: baseURL,

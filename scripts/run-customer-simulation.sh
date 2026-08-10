@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Playwright customer simulation with human-like pacing (override with PLAYWRIGHT_SLOW_MO).
-# Extra homepage_revamp_test visitors: SIM_EXPERIMENT_USERS=100 (default). ~25% are returning
-# with a reused Statsig stableID. Also covers gates/configs/experiments: coupon, free shipping,
-# newsletter, PDP recs, checkout shipping, low-stock, notify-me, platform banner, profile.
+# Extra homepage_revamp_test visitors: SIM_EXPERIMENT_USERS=100 (default) **per platform**
+# (desktop / android / ios Playwright projects ≈ 300 experiment visitors). ~25% are returning
+# with a reused Statsig stableID (scoped per platform). Also covers gates/configs/experiments:
+# coupon, free shipping, newsletter, PDP recs, checkout shipping, low-stock, notify-me,
+# platform banner, profile.
 # Always boots a dedicated Vite server with VITE_STATSIG_TIER=production (does not reuse a
 # local `npm run dev` that may still be on the development tier).
+# Filter platforms: npx playwright test ... --project=desktop (or android / ios).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

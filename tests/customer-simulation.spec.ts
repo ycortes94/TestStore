@@ -625,7 +625,8 @@ registerTabJourneysSuite('returning', 'user-2')
 /**
  * Extra unique visitors for `homepage_revamp_test`: each gets a Statsig stableID (fresh for
  * new users; deterministic reused IDs for returning), hits the assigned homepage, and completes
- * a purchase. Override count with `SIM_EXPERIMENT_USERS` (default 100).
+ * a purchase. `SIM_EXPERIMENT_USERS` (default 100) is **per Playwright project**
+ * (desktop / android / ios), so a full run is ~300 experiment visitors.
  * Variants also exercise PDP recs, express shipping, and promo thresholds when on Control/Studio.
  */
 function experimentUserCount(): number {
@@ -639,7 +640,7 @@ function experimentUserCount(): number {
 function registerExperimentTrafficSuite(): void {
   const count = experimentUserCount()
 
-  test.describe.parallel(`homepage_revamp_test traffic (${count} users)`, () => {
+  test.describe.parallel(`homepage_revamp_test traffic (${count} users per platform)`, () => {
     test.describe.configure({ timeout: 120_000 })
 
     for (let index = 1; index <= count; index += 1) {

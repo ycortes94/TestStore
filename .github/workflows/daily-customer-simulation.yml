@@ -33,7 +33,8 @@ concurrency:
 jobs:
   simulate:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # ~3× matrix (desktop + android + ios device projects); leave headroom for retries.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
@@ -52,6 +53,7 @@ jobs:
         run: npm run simulate-customers
         env:
           CI: true
+          # Per platform (desktop / android / ios) → ~300 experiment visitors total.
           SIM_EXPERIMENT_USERS: '100'
           VITE_STATSIG_TIER: production
           # Keep pacing human-like but leave headroom under the 120s test timeout.

@@ -1,19 +1,38 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { Page } from '@playwright/test'
+import { test, type Page } from '@playwright/test'
 
 export type SimulatedCohort = 'new' | 'returning'
 
 export type PrimeSessionOptions = {
   cohort: SimulatedCohort
-  /** Stable label for this simulated person, e.g. user-1 / exp-user-4 */
+  /**
+   * Base label for this simulated person, e.g. user-1 / exp-user-4.
+   * Automatically suffixed with the Playwright project name (desktop|android|ios)
+   * so each platform gets a distinct Statsig stableID.
+   */
   userLabel: string
   /**
    * When set for returning users, Statsig will reuse this unit across runs.
-   * Omit to derive a deterministic ID from `userLabel`.
+   * Omit to derive a deterministic ID from the platform-scoped `userLabel`.
    */
   stableID?: string
+}
+
+/** desktop | android | ios — falls back to "desktop" outside a running test. */
+export function currentSimPlatform(): string {
+  try {
+    return test.info().project.name
+  } catch {
+    return 'desktop'
+  }
+}
+
+/** Scope a persona label to the active Playwright project. */
+export function platformScopedUserLabel(userLabel: string): string {
+  const platform = currentSimPlatform()
+  return userLabel.endsWith(`-${platform}`) ? userLabel : `${userLabel}-${platform}`
 }
 
 /** Same DJB2 Statsig uses for `statsig.stable_id.<hash>` storage keys. */
@@ -75,6 +94,9 @@ function resolveStatsigClientKey(): string {
 export async function primeUserSession(page: Page, options: PrimeSessionOptions): Promise<void> {
   await page.context().clearCookies()
 
+  // Keep desktop/android/ios personas distinct in Statsig (returning stableID is derived from label).
+  const scopedLabel = platformScopedUserLabel(options.userLabel)
+
   const priorSessionAt = new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString()
   const priorDayEvents = [
     { type: 'home_viewed', at: priorSessionAt, totalProducts: 9 },
@@ -88,7 +110,7 @@ export async function primeUserSession(page: Page, options: PrimeSessionOptions)
   const forcedVariant = process.env.SIM_HOMEPAGE_VARIANT?.trim() || null
   const returningStableID =
     options.cohort === 'returning'
-      ? (options.stableID ?? stableIdForPersona(options.userLabel))
+      ? (options.stableID ?? stableIdForPersona(scopedLabel))
       : null
   const stableIdStorageKey = clientKey ? statsigStableIdStorageKey(clientKey) : null
 
@@ -130,7 +152,7 @@ export async function primeUserSession(page: Page, options: PrimeSessionOptions)
     },
     {
       cohort: options.cohort,
-      userLabel: options.userLabel,
+      userLabel: scopedLabel,
       priorAt: priorSessionAt,
       priorEventsJson: JSON.stringify(priorDayEvents),
       returningStableID,

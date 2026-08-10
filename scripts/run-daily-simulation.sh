@@ -17,7 +17,8 @@ if [ -s "$NVM_DIR/nvm.sh" ]; then
 fi
 
 # Extra unique visitors for homepage_revamp_test (purchase + fitting where available).
-# ~25% are returning personas with a reused Statsig stableID across runs.
+# SIM_EXPERIMENT_USERS is per platform (desktop/android/ios); default 100 → ~300 total.
+# ~25% are returning personas with a reused Statsig stableID across runs (scoped per platform).
 export SIM_EXPERIMENT_USERS="${SIM_EXPERIMENT_USERS:-100}"
 export VITE_STATSIG_TIER="${VITE_STATSIG_TIER:-production}"
 # Force a dedicated Vite server on 5180 with production Statsig tier (see playwright.config.ts).
@@ -33,7 +34,7 @@ LOG_FILE="$LOG_DIR/daily-simulation.log"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S %z') (system) ====="
   echo "===== $(TZ=America/Los_Angeles date '+%Y-%m-%d %H:%M:%S %Z') (America/Los_Angeles) ====="
   echo "cwd: $REPO_ROOT"
-  echo "SIM_EXPERIMENT_USERS=${SIM_EXPERIMENT_USERS}"
+  echo "SIM_EXPERIMENT_USERS=${SIM_EXPERIMENT_USERS} (per platform: desktop/android/ios)"
 } >>"$LOG_FILE"
 
 if ! command -v npm >/dev/null 2>&1; then
