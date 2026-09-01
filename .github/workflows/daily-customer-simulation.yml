@@ -56,7 +56,9 @@ jobs:
           # Per platform (desktop / android / ios) → ~300 experiment visitors total.
           SIM_EXPERIMENT_USERS: '100'
           VITE_STATSIG_TIER: production
-          # Keep pacing human-like but leave headroom under the 120s test timeout.
+          # Local sim script defaults to 16 workers; GitHub-hosted runners stay at 2.
+          PLAYWRIGHT_WORKERS: '2'
+          # Keep pacing human-like but leave headroom under the 180s experiment timeout.
           PLAYWRIGHT_SLOW_MO: '80'
           SIM_HUMAN_MIN_MS: '280'
           SIM_HUMAN_MAX_MS: '700'

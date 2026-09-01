@@ -52,8 +52,17 @@ async function humanMicroPause(page: Page, minMs = 220, maxMs = 560): Promise<vo
 /** Types like a person (character delays), not an instant `.fill()`. */
 async function humanType(page: Page, locator: Locator, text: string): Promise<void> {
   await locator.click()
-  await humanMicroPause(page, 120, 300)
-  await locator.pressSequentially(text, { delay: randInt(55, 125) })
+  await humanMicroPause(page, 80, 200)
+  // Under PLAYWRIGHT_SLOW_MO each keystroke also pays slowMo; keep delays short so long
+  // forms (fitting-call notes) do not burn the experiment-suite budget alone.
+  const slowMo = Number(process.env.PLAYWRIGHT_SLOW_MO ?? 0)
+  const delay =
+    slowMo > 0
+      ? randInt(18, 40)
+      : text.length > 24
+        ? randInt(28, 55)
+        : randInt(45, 95)
+  await locator.pressSequentially(text, { delay })
 }
 
 type HomepageVariant = 'control' | 'runway' | 'studio'
@@ -121,34 +130,35 @@ async function bookFittingCall(
   await bookBtn.click()
   const dialog = page.getByRole('dialog', { name: /Book a fitting call/i })
   await expect(dialog).toBeVisible()
-  await humanPause(page, 400, 900)
+  await humanMicroPause(page, 200, 450)
 
   await humanType(page, dialog.getByLabel('Name'), persona.name)
-  await humanMicroPause(page)
-  await humanType(page, dialog.getByLabel('Email'), persona.email)
-  await humanMicroPause(page)
+  await humanMicroPause(page, 120, 280)
+  // Email / notes: fill is fine for Pulse and avoids slowMo × keystroke blowups.
+  await dialog.getByLabel('Email').fill(persona.email)
+  await humanMicroPause(page, 120, 280)
 
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
   const preferredDate = tomorrow.toISOString().slice(0, 10)
   await dialog.getByLabel('Preferred date').fill(preferredDate)
-  await humanMicroPause(page)
+  await humanMicroPause(page, 100, 220)
 
   const timeSlots = ['09:00', '11:00', '13:00', '15:00', '17:00'] as const
   await dialog.getByLabel('Time').selectOption(timeSlots[randInt(0, timeSlots.length - 1)])
-  await humanMicroPause(page)
+  await humanMicroPause(page, 100, 220)
 
   if (persona.notes) {
-    await humanType(page, dialog.getByLabel(/Notes/i), persona.notes)
-    await humanMicroPause(page)
+    await dialog.getByLabel(/Notes/i).fill(persona.notes)
+    await humanMicroPause(page, 120, 280)
   }
 
   await dialog.getByRole('button', { name: 'Schedule fitting call' }).click()
   await expect(page.getByRole('heading', { name: /You.?re on the calendar/i })).toBeVisible()
-  await humanPause(page, 500, 1_100)
+  await humanPause(page, 350, 750)
   await page.getByRole('button', { name: 'Back to shopping' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await humanMicroPause(page, 300, 720)
+  await humanMicroPause(page, 200, 450)
   await flushStatsig(page)
   return true
 }
@@ -215,29 +225,29 @@ async function completePurchase(
   options?: { shipping?: 'standard' | 'express' },
 ): Promise<void> {
   const shipping = options?.shipping ?? (Math.random() < 0.45 ? 'express' : 'standard')
-  await humanPause(page, 430, 1_000)
+  await humanMicroPause(page, 200, 450)
   await beginCheckout(page)
   const review = page.getByRole('dialog', { name: /Review your order/i })
   await expect(review).toBeVisible()
-  await humanPause(page, 500, 1_100)
+  await humanPause(page, 300, 700)
 
   // Expose free_shipping_rules + checkout_shipping_test (express upsell).
   await expect(review.locator('.free-shipping-banner').or(review.getByText(/Shipping/i)).first()).toBeVisible()
   if (shipping === 'express') {
     await review.getByRole('radio', { name: /Express/i }).check()
-    await humanMicroPause(page, 280, 620)
+    await humanMicroPause(page, 150, 350)
   } else {
     await review.getByRole('radio', { name: /Standard/i }).check()
-    await humanMicroPause(page, 220, 500)
+    await humanMicroPause(page, 120, 280)
   }
 
-  await humanPause(page, 450, 1_000)
+  await humanMicroPause(page, 200, 450)
   await page.getByRole('button', { name: 'Place order' }).click()
   await expect(page.getByRole('heading', { name: /Thanks — your order is in/i })).toBeVisible()
-  await humanPause(page, 530, 1_180)
+  await humanPause(page, 350, 750)
   await page.getByRole('button', { name: 'Back to shopping' }).click()
   await expect(page.getByRole('dialog', { name: /Thanks|Review your order|Cart details/i })).toHaveCount(0)
-  await humanMicroPause(page, 300, 720)
+  await humanMicroPause(page, 200, 450)
   await flushStatsig(page)
 }
 
@@ -641,7 +651,9 @@ function registerExperimentTrafficSuite(): void {
   const count = experimentUserCount()
 
   test.describe.parallel(`homepage_revamp_test traffic (${count} users per platform)`, () => {
-    test.describe.configure({ timeout: 120_000 })
+    // Fitting + PDP + checkout under slowMo can exceed 120s when the machine is busy;
+    // keep headroom so flaky timeouts do not burn retries on otherwise healthy journeys.
+    test.describe.configure({ timeout: 180_000 })
 
     for (let index = 1; index <= count; index += 1) {
       const userLabel = `exp-user-${index}`
@@ -653,7 +665,7 @@ function registerExperimentTrafficSuite(): void {
         await primeUserSession(page, { cohort, userLabel })
         await page.goto('/')
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-        await humanPause(page, 500, 1_200)
+        await humanPause(page, 350, 800)
 
         const homepage = await detectHomepageVariant(page)
 
@@ -677,16 +689,16 @@ function registerExperimentTrafficSuite(): void {
           const featuredAdd = page.locator('.runway-featured__add').first()
           if (await featuredAdd.isEnabled().catch(() => false)) {
             await featuredAdd.click()
-            await humanMicroPause(page)
+            await humanMicroPause(page, 150, 350)
           }
         } else if (journey === 0) {
           await heroPrimaryCta(page).click()
-          await humanMicroPause(page, 280, 680)
+          await humanMicroPause(page, 200, 450)
           await expect(page.getByRole('searchbox')).toBeVisible()
           const bookBtn = page.getByRole('button', { name: 'Book a fitting call' })
           if (await bookBtn.isVisible().catch(() => false)) {
             await bookBtn.scrollIntoViewIfNeeded()
-            await humanPause(page, 350, 800)
+            await humanMicroPause(page, 150, 350)
             await bookFittingCall(page, {
               name: `Experiment Shopper ${index}`,
               email: `exp.user.${index}@example.com`,
@@ -707,15 +719,15 @@ function registerExperimentTrafficSuite(): void {
 
         if (journey === 2) {
           await page.getByRole('button', { name: 'Apparel', exact: true }).click()
-          await humanMicroPause(page)
+          await humanMicroPause(page, 150, 350)
           await page.getByLabel('Sort').selectOption('rating')
-          await humanPause(page, 350, 820)
+          await humanMicroPause(page, 200, 450)
           await browseProductDetail(page, 'Studio Wrap Jacket', { addToBag: true, clickRec: true })
           await page.goto('/')
           await openHeroCatalog(page)
         } else if (journey === 1 && homepage !== 'runway') {
           await page.getByRole('button', { name: 'Footwear', exact: true }).click()
-          await humanMicroPause(page)
+          await humanMicroPause(page, 150, 350)
           await browseProductDetail(page, 'City Trail Sneaker', { addToBag: true })
           await page.goto('/')
           await openHeroCatalog(page)
@@ -723,12 +735,12 @@ function registerExperimentTrafficSuite(): void {
         }
 
         await page.getByRole('button', { name: 'Add to bag' }).first().click()
-        await humanPause(page, 400, 950)
+        await humanPause(page, 280, 650)
         if (journey !== 1) {
           const secondAdd = page.getByRole('button', { name: 'Add to bag' }).nth(1)
           if (await secondAdd.isVisible().catch(() => false)) {
             await secondAdd.click()
-            await humanMicroPause(page)
+            await humanMicroPause(page, 150, 350)
           }
         }
 
