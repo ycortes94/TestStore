@@ -2,28 +2,41 @@
 # (America/Los_Angeles — handles PST/PDT). See:
 # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onschedule
 #
-# Schedule (Pacific): 8:00, 9:30, 14:00, 17:00 (5 PM), 20:00 (8 PM).
+# Schedule (Pacific): 8:00, 14:00, 20:00 (8 PM).
 #
 # Scheduling notes:
 # - Runs only from the repository DEFAULT branch (merge this file to main/master).
 # - GitHub may delay scheduled runs during high load (not wall-clock exact).
 # - Forks: scheduled workflows are disabled unless you enable Actions.
 # - Manual test: Actions → this workflow → “Run workflow”.
+#
+# Minutes budget (private repo → ubuntu-latest is 2 vCPU / 8 GB and bills free minutes):
+# - Each run is capped to ~15 minutes: ~1 min of setup + SIM_TIME_BUDGET_MS of simulation.
+#   The experiment-traffic suite (the bulk of the visitors) stops starting new visitors once
+#   its per-platform slice of the budget is used up; remaining visitors are reported as
+#   skipped, not failed. The persona / Statsig-coverage journeys always run in full.
+# - 3 runs/day × ~15 min ≈ 1,350 min/month, inside the 2,000-minute free tier.
+# - The previous config (5 runs/day, 2 workers, slowMo 80, no cap) took ~41 min/run.
 name: Daily customer simulation
 
 on:
   schedule:
     - cron: '0 8 * * *'
       timezone: America/Los_Angeles
-    - cron: '30 9 * * *'
-      timezone: America/Los_Angeles
     - cron: '0 14 * * *'
-      timezone: America/Los_Angeles
-    - cron: '0 17 * * *'
       timezone: America/Los_Angeles
     - cron: '0 20 * * *'
       timezone: America/Los_Angeles
   workflow_dispatch:
+    inputs:
+      time_budget_ms:
+        description: 'Wall-clock budget for experiment traffic (ms), split across desktop/android/ios'
+        required: false
+        default: '780000'
+      experiment_users:
+        description: 'Max homepage_revamp_test visitors per platform (the time budget usually trims this)'
+        required: false
+        default: '100'
 
 # Do not cancel an in-progress run when the next schedule fires.
 concurrency:
@@ -33,8 +46,9 @@ concurrency:
 jobs:
   simulate:
     runs-on: ubuntu-latest
-    # ~3× matrix (desktop + android + ios device projects); leave headroom for retries.
-    timeout-minutes: 180
+    # Hard cap so a hung run can never burn more than this. Normal runs finish in ~15 min:
+    # setup (~1 min) + SIM_TIME_BUDGET_MS (13 min) + in-flight visitors draining (~1 min).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -53,15 +67,24 @@ jobs:
         run: npm run simulate-customers
         env:
           CI: true
-          # Per platform (desktop / android / ios) → ~300 experiment visitors total.
-          SIM_EXPERIMENT_USERS: '100'
+          # Upper bound per platform (desktop / android / ios). In practice the time budget
+          # below decides how many actually run; the rest are skipped.
+          SIM_EXPERIMENT_USERS: ${{ inputs.experiment_users || '100' }}
+          # Split evenly across the three platforms in run order (desktop → android → ios).
+          # 780000 ms = 13 min, leaving ~2 min for setup + draining under the 15-min goal.
+          SIM_TIME_BUDGET_MS: ${{ inputs.time_budget_ms || '780000' }}
           VITE_STATSIG_TIER: production
-          # Local sim script defaults to 16 workers; GitHub-hosted runners stay at 2.
-          PLAYWRIGHT_WORKERS: '2'
-          # Keep pacing human-like but leave headroom under the 180s experiment timeout.
-          PLAYWRIGHT_SLOW_MO: '80'
-          SIM_HUMAN_MIN_MS: '280'
-          SIM_HUMAN_MAX_MS: '700'
+          # 2 vCPU runner. Journeys are ~half waits (pauses, SDK network), so 4 workers keep
+          # both cores busy; per-test timeouts (120–180 s) leave plenty of headroom.
+          PLAYWRIGHT_WORKERS: '4'
+          # Faster-than-human pacing (close to the local sim script's profile):
+          # slowMo 80→25, think pauses 280–700→120–320, settle pauses 220–560→60–160.
+          # Each visitor drops from ~13.5 s to ~9 s; the remaining time is real app work.
+          PLAYWRIGHT_SLOW_MO: '25'
+          SIM_HUMAN_MIN_MS: '120'
+          SIM_HUMAN_MAX_MS: '320'
+          SIM_MICRO_MIN_MS: '60'
+          SIM_MICRO_MAX_MS: '160'
           # Create under Repo → Settings → Secrets and variables → Actions
           VITE_STATSIG_CLIENT_KEY: ${{ secrets.VITE_STATSIG_CLIENT_KEY }}
           VITE_AMPLITUDE_API_KEY: ${{ secrets.VITE_AMPLITUDE_API_KEY }}

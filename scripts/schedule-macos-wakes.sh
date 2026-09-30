@@ -19,7 +19,7 @@ if [[ "${1:-}" == "clear" ]]; then
   exit 0
 fi
 
-# Wake ~5 minutes before 08:00, 09:30, 14:00, 17:00, and 20:00 local time, every day.
+# Wake ~5 minutes before the 08:00 simulation (later runs are 14:00 and 20:00), every day.
 # pmset only supports one repeating schedule, so we use the earliest morning wake
 # and rely on the machine staying awake (or Power Adapter “Prevent sleeping”) for later runs.
 # For multiple wakes, schedule one-off wakes for the next few days or use GitHub Actions.

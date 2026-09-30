@@ -4,6 +4,10 @@ const simPort = process.env.PLAYWRIGHT_PORT ?? (process.env.CI ? '5180' : '5173'
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${simPort}`
 const slowMo = process.env.PLAYWRIGHT_SLOW_MO ? Number(process.env.PLAYWRIGHT_SLOW_MO) : 0
 
+// Run start for the experiment-traffic time budget (SIM_TIME_BUDGET_MS, see the spec).
+// Set once in the runner process; worker processes inherit it via process.env.
+process.env.SIM_STARTED_AT ??= String(Date.now())
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,

@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test as base, type Locator, type Page } from '@playwright/test'
 import { primeUserSession, type SimulatedCohort } from './user-session'
 
 async function flushStatsig(page: Page): Promise<void> {
@@ -10,10 +10,18 @@ async function flushStatsig(page: Page): Promise<void> {
   })
 }
 
-test.afterEach(async ({ page }) => {
-  await flushStatsig(page).catch(() => {
-    /* page may already be closed */
-  })
+/**
+ * Flush batched Statsig events right before the page closes. Done as a fixture (not a global
+ * afterEach) so visitors skipped by the time budget never pay for a browser context.
+ */
+const test = base.extend({
+  // Named `provide` (not Playwright's usual `use`) to keep eslint's rules-of-hooks quiet.
+  page: async ({ page }, provide) => {
+    await provide(page)
+    await flushStatsig(page).catch(() => {
+      /* page may already be closed */
+    })
+  },
 })
 
 
@@ -21,9 +29,44 @@ function randInt(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1))
 }
 
-function envMs(key: 'SIM_HUMAN_MIN_MS' | 'SIM_HUMAN_MAX_MS', fallback: number): number {
+type PaceEnvKey = 'SIM_HUMAN_MIN_MS' | 'SIM_HUMAN_MAX_MS' | 'SIM_MICRO_MIN_MS' | 'SIM_MICRO_MAX_MS'
+
+function envMs(key: PaceEnvKey, fallback: number): number {
   const n = Number(process.env[key])
   return Number.isFinite(n) && n >= 0 ? n : fallback
+}
+
+/** Resolve a [min, max] pause window: env bounds (when set) win over per-call args. */
+function pauseBounds(
+  minKey: PaceEnvKey,
+  maxKey: PaceEnvKey,
+  minMs: number | undefined,
+  maxMs: number | undefined,
+  defaultMin: number,
+  defaultMax: number,
+): [number, number] {
+  const min = process.env[minKey] !== undefined ? envMs(minKey, defaultMin) : (minMs ?? defaultMin)
+  const max = process.env[maxKey] !== undefined ? envMs(maxKey, defaultMax) : (maxMs ?? defaultMax)
+  return [Math.min(min, max), Math.max(min, max)]
+}
+
+/**
+ * Wall-clock budget for the experiment-traffic suite (CI minutes protection).
+ * `SIM_TIME_BUDGET_MS` is split evenly across the Playwright projects in the order they run
+ * (desktop → android → ios), so every platform gets a fair share of the run. `SIM_STARTED_AT`
+ * (epoch ms) is stamped by playwright.config.ts when the run begins.
+ */
+function experimentTrafficDeadline(): number | null {
+  const budget = Number(process.env.SIM_TIME_BUDGET_MS)
+  const startedAt = Number(process.env.SIM_STARTED_AT)
+  if (!Number.isFinite(budget) || budget <= 0 || !Number.isFinite(startedAt) || startedAt <= 0) {
+    return null
+  }
+  const info = test.info()
+  const projectNames = info.config.projects.map((project) => project.name)
+  const index = Math.max(0, projectNames.indexOf(info.project.name))
+  const share = (index + 1) / Math.max(1, projectNames.length)
+  return startedAt + budget * share
 }
 
 /**
@@ -31,22 +74,17 @@ function envMs(key: 'SIM_HUMAN_MIN_MS' | 'SIM_HUMAN_MAX_MS', fallback: number): 
  * When `SIM_HUMAN_MIN_MS` / `SIM_HUMAN_MAX_MS` are set (CI), those bounds win over per-call args.
  */
 async function humanPause(page: Page, minMs?: number, maxMs?: number): Promise<void> {
-  const min =
-    process.env.SIM_HUMAN_MIN_MS !== undefined
-      ? envMs('SIM_HUMAN_MIN_MS', 600)
-      : (minMs ?? 600)
-  const max =
-    process.env.SIM_HUMAN_MAX_MS !== undefined
-      ? envMs('SIM_HUMAN_MAX_MS', 1_450)
-      : (maxMs ?? 1_450)
-  const hi = Math.max(min, max)
-  const lo = Math.min(min, max)
+  const [lo, hi] = pauseBounds('SIM_HUMAN_MIN_MS', 'SIM_HUMAN_MAX_MS', minMs, maxMs, 600, 1_450)
   await page.waitForTimeout(randInt(lo, hi))
 }
 
-/** Short settle time after small UI changes (tabs, chips). */
-async function humanMicroPause(page: Page, minMs = 220, maxMs = 560): Promise<void> {
-  await page.waitForTimeout(randInt(minMs, maxMs))
+/**
+ * Short settle time after small UI changes (tabs, chips). ~50 call sites per journey make this
+ * the largest pacing cost, so CI overrides it via `SIM_MICRO_MIN_MS` / `SIM_MICRO_MAX_MS`.
+ */
+async function humanMicroPause(page: Page, minMs?: number, maxMs?: number): Promise<void> {
+  const [lo, hi] = pauseBounds('SIM_MICRO_MIN_MS', 'SIM_MICRO_MAX_MS', minMs, maxMs, 220, 560)
+  await page.waitForTimeout(randInt(lo, hi))
 }
 
 /** Types like a person (character delays), not an instant `.fill()`. */
@@ -655,6 +693,16 @@ function registerExperimentTrafficSuite(): void {
     // keep headroom so flaky timeouts do not burn retries on otherwise healthy journeys.
     test.describe.configure({ timeout: 180_000 })
 
+    // No fixtures requested here on purpose: a skipped visitor must not pay for a browser
+    // context. Remaining visitors are skipped (not failed) once this platform's slice of
+    // SIM_TIME_BUDGET_MS is used up, so the run always lands inside the CI minutes budget.
+    test.beforeEach(() => {
+      const deadline = experimentTrafficDeadline()
+      if (deadline !== null && Date.now() > deadline) {
+        test.skip(true, `SIM_TIME_BUDGET_MS exhausted for ${test.info().project.name}`)
+      }
+    })
+
     for (let index = 1; index <= count; index += 1) {
       const userLabel = `exp-user-${index}`
       // ~25% returning with a stable Statsig unit reused across daily runs.
@@ -851,5 +899,6 @@ function registerStatsigSurfacesSuite(): void {
   })
 }
 
-registerExperimentTrafficSuite()
+// Coverage journeys first so the time-budgeted experiment traffic only ever trims itself.
 registerStatsigSurfacesSuite()
+registerExperimentTrafficSuite()
