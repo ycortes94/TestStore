@@ -8,7 +8,12 @@ import App from './App.tsx'
 import { initAnalytics } from './lib/analytics'
 import { initStatsig } from './lib/statsig'
 
-const Router = Capacitor.isNativePlatform() ? HashRouter : BrowserRouter
+/** Project Pages URLs are /<repo>/...; local dev and Capacitor keep the default base. */
+const pagesBasename = (() => {
+  const base = import.meta.env.BASE_URL
+  if (!base || base === '/' || base === './') return undefined
+  return base.endsWith('/') ? base.slice(0, -1) : base
+})()
 
 /**
  * SDK init runs before the first render so experiments resolve without flicker. On device
@@ -48,10 +53,14 @@ void (async () => {
     console.error('Statsig SDK init failed', error)
   }
 
-  const app = (
-    <Router>
+  const app = Capacitor.isNativePlatform() ? (
+    <HashRouter>
       <App />
-    </Router>
+    </HashRouter>
+  ) : (
+    <BrowserRouter basename={pagesBasename}>
+      <App />
+    </BrowserRouter>
   )
 
   createRoot(document.getElementById('root')!).render(

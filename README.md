@@ -19,6 +19,17 @@ npm run dev   # start Vite dev server on http://localhost:5173
 npm run build # type-check and create a production build in dist/
 ```
 
+## GitHub Pages
+
+The storefront is a client-side app, so Pages needs two things the local dev server gets for free: asset URLs under `/TestStore/`, and a copy of `index.html` at `404.html` so routes like `/product/:id` still load on refresh.
+
+Pushing to `main` runs `.github/workflows/deploy-pages.yml`, which builds with `PAGES_BASE=/TestStore/` and deploys the `dist/` folder. After the first push, turn the site on once:
+
+1. GitHub → **Settings** → **Pages**
+2. **Build and deployment** → **Source**: GitHub Actions
+
+The site is then at `https://ycortes94.github.io/TestStore/`. Local `npm run dev` and Capacitor builds are unchanged (`base: './'`).
+
 ## Mobile testing
 
 ### Phone browsers (works immediately)
