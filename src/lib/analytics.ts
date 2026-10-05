@@ -30,9 +30,9 @@ type UnifiedSessionReplayConfig = NonNullable<NonNullable<Parameters<typeof init
 
 type EventProperties = Record<string, string | number | boolean | null | undefined>
 
+/** Set via `.env` locally and the `VITE_AMPLITUDE_API_KEY` Actions secret in CI. No fallback: without it analytics is a no-op. */
 const rawApiKey = import.meta.env.VITE_AMPLITUDE_API_KEY
-const AMPLITUDE_API_KEY =
-  typeof rawApiKey === 'string' && rawApiKey.trim() !== '' ? rawApiKey.trim() : '5df5f04114dd4043d7fa68c45d08fa6a'
+const AMPLITUDE_API_KEY = typeof rawApiKey === 'string' && rawApiKey.trim() !== '' ? rawApiKey.trim() : ''
 
 /** 0–1; defaults to 1 (all sessions). Override with VITE_AMPLITUDE_SESSION_REPLAY_SAMPLE_RATE. */
 const sessionReplaySampleRate = Math.min(

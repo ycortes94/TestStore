@@ -36,6 +36,11 @@ jobs:
         env:
           # Project site path. github.event.repository.name keeps this in sync if the repo is renamed.
           PAGES_BASE: /${{ github.event.repository.name }}/
+          # Client-side SDK keys are baked into the bundle at build time.
+          # Create under Repo → Settings → Secrets and variables → Actions
+          VITE_STATSIG_CLIENT_KEY: ${{ secrets.VITE_STATSIG_CLIENT_KEY }}
+          VITE_AMPLITUDE_API_KEY: ${{ secrets.VITE_AMPLITUDE_API_KEY }}
+          VITE_STATSIG_TIER: production
 
       # Pages has no SPA rewrite. Serving the app as the 404 keeps /product/:id and /profile
       # working when someone opens or refreshes those URLs.

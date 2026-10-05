@@ -82,7 +82,7 @@ The storefront ships with the Amplitude Browser SDK 2.x for lightweight instrume
 VITE_AMPLITUDE_API_KEY=YOUR_API_KEY
 ```
 
-This project key is preconfigured in code for convenience, but you can override it with your own environment variable for isolated testing. With the key in place, the app tracks basic funnel events such as hero interactions, filter usage, and cart changes so you can evaluate flows in Amplitude.
+Locally, put it in `.env` (see `.env.example`). In CI, the GitHub Pages deploy and the daily customer simulation read it from the `VITE_AMPLITUDE_API_KEY` repository secret (Settings → Secrets and variables → Actions). No key is hardcoded; without one, analytics is a no-op. With the key in place, the app tracks basic funnel events such as hero interactions, filter usage, and cart changes so you can evaluate flows in Amplitude.
 
 ## Project structure
 
