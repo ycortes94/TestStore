@@ -11,6 +11,7 @@
  *
  * When you add accounts: call `setTrackedUserId` with a **stable** internal id after login; call
  * `resetToAnonymousVisitor` on logout (clears user id and rotates device id, per Amplitude).
+ * Both keep Statsig in sync: Statsig `stableID` = Amplitude `device_id`, `userID` = `user_id`.
  */
 import {
   flush,
@@ -23,7 +24,7 @@ import {
   track,
 } from '@amplitude/unified'
 import { getPlatformEventFields } from './platform'
-import { getStatsigStableID } from './statsig'
+import { getStatsigStableID, syncStatsigIdentityWithAmplitude } from './statsig'
 
 /** Unified’s public `SessionReplayOptions` comes from standalone SR types and omits plugin-only flags; runtime accepts them (see Session Replay plugin docs). */
 type UnifiedSessionReplayConfig = NonNullable<NonNullable<Parameters<typeof initAll>[1]>['sessionReplay']>
@@ -231,18 +232,20 @@ export const isAnalyticsEnabled = (): boolean => hasInitialized
 /**
  * After login: set the Amplitude user id to a **stable** value that will not change for that
  * account (not a display name). Anonymous events on this device are attributed to this user.
+ * Also sets the Statsig `userID` so forwarded Statsig events carry the same `user_id`.
  */
-export const setTrackedUserId = (userId: string): void => {
+export const setTrackedUserId = async (userId: string): Promise<void> => {
   if (!hasInitialized) {
     return
   }
   setUserId(userId)
+  await syncStatsigIdentityWithAmplitude()
 }
 
 /**
  * After logout: clear `user_id` and generate a new device id so later events are a fresh anonymous
  * visitor (see Amplitude “track unique users” — logout / anonymous behavior). Re-aligns Session
- * Replay with the new device id.
+ * Replay and the Statsig stableID / userID with the new identity.
  */
 export const resetToAnonymousVisitor = async (): Promise<void> => {
   if (!hasInitialized) {
@@ -250,4 +253,5 @@ export const resetToAnonymousVisitor = async (): Promise<void> => {
   }
   reset()
   await alignSessionReplayWithAnalytics()
+  await syncStatsigIdentityWithAmplitude()
 }

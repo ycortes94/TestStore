@@ -1,4 +1,5 @@
-import { StableID, StatsigClient } from '@statsig/js-client'
+import { getDeviceId, getUserId } from '@amplitude/unified'
+import { StableID, StatsigClient, type StatsigUser } from '@statsig/js-client'
 import { getPlatformEventFields, getPlatformInfo } from './platform'
 
 /**
@@ -37,6 +38,42 @@ const clearCachedEvaluationsForDev = (): void => {
   }
 }
 
+const nonEmpty = (value: string | null | undefined): string | undefined =>
+  typeof value === 'string' && value.trim() !== '' ? value : undefined
+
+/**
+ * Statsig identity mirrors Amplitude so forwarded Statsig events land on the same Amplitude user:
+ * stableID = Amplitude device_id, userID = Amplitude user_id. Amplitude must be initialized first;
+ * if it is not, falls back to Statsig's own persisted stableID.
+ * Gates with idType "stableID" require it on user.customIDs (not only in SDK storage).
+ */
+const buildStatsigUser = (sdkKey: string): StatsigUser => {
+  const stableID = nonEmpty(getDeviceId()) ?? nonEmpty(StableID.get(sdkKey))
+  const userID = nonEmpty(getUserId())
+  const platformInfo = getPlatformInfo()
+
+  return {
+    ...(userID ? { userID } : {}),
+    customIDs: stableID ? { stableID } : undefined,
+    // Used by Dynamic Config / Gate rules that target custom_field os_family / platform.
+    custom: {
+      ...getPlatformEventFields(),
+    },
+    userAgent: platformInfo.userAgent || undefined,
+  }
+}
+
+/**
+ * Re-reads Amplitude's device ID / user ID and updates the Statsig user. Call after any Amplitude
+ * identity change (login, logout/reset) so gates and logged events stay tied to the same user.
+ */
+export const syncStatsigIdentityWithAmplitude = async (): Promise<void> => {
+  if (!client || !STATSIG_CLIENT_KEY) {
+    return
+  }
+  await client.updateUserAsync(buildStatsigUser(STATSIG_CLIENT_KEY))
+}
+
 /**
  * Creates and initializes the shared Statsig client. Call once from the app entry before
  * rendering; returns null (and logs a dev warning) when no client key is configured.
@@ -55,11 +92,6 @@ export const initStatsig = async (): Promise<StatsigClient | null> => {
 
   clearCachedEvaluationsForDev()
 
-  // Anonymous storefront: randomize gates/experiments on Statsig's persisted stableID.
-  // Gates with idType "stableID" require it on user.customIDs (not only in SDK storage).
-  const stableID = StableID.get(STATSIG_CLIENT_KEY)
-  const platformFields = getPlatformEventFields()
-  const platformInfo = getPlatformInfo()
   const tierOverride = import.meta.env.VITE_STATSIG_TIER
   const environment =
     typeof tierOverride === 'string' && tierOverride.trim() !== ''
@@ -70,14 +102,7 @@ export const initStatsig = async (): Promise<StatsigClient | null> => {
 
   const instance = new StatsigClient(
     STATSIG_CLIENT_KEY,
-    {
-      customIDs: stableID ? { stableID } : undefined,
-      // Used by Dynamic Config / Gate rules that target custom_field os_family / platform.
-      custom: {
-        ...platformFields,
-      },
-      userAgent: platformInfo.userAgent || undefined,
-    },
+    buildStatsigUser(STATSIG_CLIENT_KEY),
     environment ? { environment } : null,
   )
   await instance.initializeAsync()
@@ -94,7 +119,12 @@ export const initStatsig = async (): Promise<StatsigClient | null> => {
     const context = instance.getContext()
     console.info('[Statsig] environment tier:', context.options?.environment?.tier ?? 'production (default)')
     console.info('[Statsig] Use this stableID for experiment overrides:', context.stableID)
-    console.info('[Statsig] platform (user.custom + events):', platformFields)
+    console.info('[Statsig] platform (user.custom + events):', context.user.custom)
+    console.info('[Statsig] identity (mirrors Amplitude):', {
+      stableID: context.user.customIDs?.stableID,
+      amplitudeDeviceId: getDeviceId(),
+      userID: context.user.userID,
+    })
     console.info('[Statsig] homepage_revamp_test evaluation:', {
       groupName: homepage.groupName,
       reason: homepage.details.reason,
